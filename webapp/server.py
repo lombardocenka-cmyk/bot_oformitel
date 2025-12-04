@@ -199,7 +199,7 @@ async def preview_post(request: Request):
             from post_formatter import format_post
         
         # Формируем предпросмотр поста
-        preview_text = await format_post(
+        preview_text = format_post(
             product_name,
             category,
             specifications,
@@ -288,7 +288,7 @@ async def create_post(request: Request):
             from post_formatter import format_post
         
         # Формируем пост
-        post_text = await format_post(
+        post_text = format_post(
             product_name,
             category,
             specifications,
