@@ -26,6 +26,8 @@ class AdminPanel(StatesGroup):
     waiting_spec_value = State()
     editing_category = State()
     editing_specs = State()
+    waiting_shop_address_name = State()
+    waiting_shop_address_text = State()
 
 @router.message(Command("admin"))
 async def cmd_admin(message: Message):
@@ -41,6 +43,7 @@ async def show_admin_menu(message: Message):
     keyboard = InlineKeyboardBuilder()
     keyboard.button(text="📂 Управление категориями", callback_data="admin_categories")
     keyboard.button(text="⚙️ Управление характеристиками", callback_data="admin_specs")
+    keyboard.button(text="📍 Управление адресами магазинов", callback_data="admin_shop_addresses")
     keyboard.button(text="📊 Статистика", callback_data="admin_stats")
     keyboard.adjust(1)
     
@@ -321,6 +324,125 @@ async def admin_delete_spec(callback: CallbackQuery):
     
     # Возвращаемся к списку характеристик
     await admin_category_specs(callback)
+
+@router.callback_query(F.data == "admin_shop_addresses")
+async def admin_shop_addresses(callback: CallbackQuery):
+    """Управление адресами магазинов"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет прав!", show_alert=True)
+        return
+    
+    addresses = await globals_module.db.get_shop_addresses()
+    
+    keyboard = InlineKeyboardBuilder()
+    keyboard.button(text="➕ Добавить адрес", callback_data="admin_add_shop_address")
+    
+    for addr_id, addr_name, addr_text in addresses:
+        keyboard.button(
+            text=f"📍 {addr_name}",
+            callback_data=f"admin_edit_shop_address_{addr_id}"
+        )
+    
+    keyboard.button(text="🔙 Назад", callback_data="admin_menu")
+    keyboard.adjust(1)
+    
+    await callback.message.edit_text(
+        "📍 <b>Управление адресами магазинов</b>\n\n"
+        "Выберите адрес для редактирования или добавьте новый:",
+        reply_markup=keyboard.as_markup(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+@router.callback_query(F.data == "admin_add_shop_address")
+async def admin_add_shop_address(callback: CallbackQuery, state: FSMContext):
+    """Добавление адреса магазина"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет прав!", show_alert=True)
+        return
+    
+    await callback.message.edit_text(
+        "➕ <b>Добавление адреса магазина</b>\n\n"
+        "Введите название адреса (например: Главный магазин):",
+        parse_mode="HTML"
+    )
+    await state.set_state(AdminPanel.waiting_shop_address_name)
+    await callback.answer()
+
+@router.message(AdminPanel.waiting_shop_address_name)
+async def process_shop_address_name(message: Message, state: FSMContext):
+    """Обработка названия адреса"""
+    address_name = message.text.strip()
+    await state.update_data(address_name=address_name)
+    
+    await message.answer(
+        "Введите адрес магазина (например: г. Москва, ул. Примерная, д. 1):"
+    )
+    await state.set_state(AdminPanel.waiting_shop_address_text)
+
+@router.message(AdminPanel.waiting_shop_address_text)
+async def process_shop_address_text(message: Message, state: FSMContext):
+    """Обработка текста адреса"""
+    address_text = message.text.strip()
+    data = await state.get_data()
+    address_name = data.get("address_name")
+    
+    # Сохраняем адрес
+    address_id = await globals_module.db.add_shop_address(address_name, address_text)
+    
+    await message.answer(
+        f"✅ Адрес добавлен!\n\n"
+        f"📍 {address_name}\n"
+        f"{address_text}"
+    )
+    
+    await state.clear()
+    await show_admin_menu(message)
+
+@router.callback_query(F.data.startswith("admin_edit_shop_address_"))
+async def admin_edit_shop_address(callback: CallbackQuery):
+    """Редактирование адреса магазина"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет прав!", show_alert=True)
+        return
+    
+    address_id = int(callback.data.split("_")[-1])
+    address = await globals_module.db.get_shop_address(address_id)
+    
+    if not address:
+        await callback.answer("❌ Адрес не найден!", show_alert=True)
+        return
+    
+    keyboard = InlineKeyboardBuilder()
+    keyboard.button(text="🗑️ Удалить", callback_data=f"admin_delete_shop_address_{address_id}")
+    keyboard.button(text="🔙 Назад", callback_data="admin_shop_addresses")
+    keyboard.adjust(1)
+    
+    await callback.message.edit_text(
+        f"📍 <b>Редактирование адреса</b>\n\n"
+        f"<b>{address[1]}</b>\n"
+        f"{address[2]}\n\n"
+        f"Выберите действие:",
+        reply_markup=keyboard.as_markup(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("admin_delete_shop_address_"))
+async def admin_delete_shop_address(callback: CallbackQuery):
+    """Удаление адреса магазина"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет прав!", show_alert=True)
+        return
+    
+    address_id = int(callback.data.split("_")[-1])
+    await globals_module.db.delete_shop_address(address_id)
+    
+    await callback.message.edit_text("✅ Адрес удален!")
+    await callback.answer()
+    
+    # Возвращаемся к списку адресов
+    await admin_shop_addresses(callback)
 
 @router.callback_query(F.data == "admin_stats")
 async def admin_stats(callback: CallbackQuery):

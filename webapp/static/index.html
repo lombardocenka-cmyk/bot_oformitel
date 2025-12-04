@@ -72,21 +72,38 @@
             <button id="photos-done-btn" class="btn-primary">✅ Готово</button>
         </div>
 
-        <!-- Шаг 5: Ссылка на Авито -->
-        <div id="step-link" class="step">
-            <h2>Ссылка на объявление Авито</h2>
+        <!-- Шаг 5: Дополнительная информация -->
+        <div id="step-additional" class="step">
+            <h2>Дополнительная информация</h2>
+            
+            <label for="product-price">💰 Цена (руб.)</label>
+            <input type="number" id="product-price" placeholder="Например: 50000" class="input-field" min="0">
+            
+            <label for="product-id">🔢 ID товара (артикул)</label>
+            <input type="text" id="product-id" placeholder="Например: ART-12345" class="input-field">
+            
+            <label for="shop-address">📍 Адрес магазина</label>
+            <select id="shop-address-select" class="input-field">
+                <option value="">Выберите адрес...</option>
+            </select>
+            <input type="text" id="shop-address-custom" placeholder="Или введите свой адрес" class="input-field" style="margin-top: 8px;">
+            
+            <label for="shop-profile-link">💬 Ссылка на профиль для покупки</label>
+            <input type="url" id="shop-profile-link" placeholder="https://t.me/username или @username" class="input-field">
+            
+            <label for="avito-link">🛒 Ссылка на объявление Авито</label>
             <input type="url" id="avito-link" placeholder="https://www.avito.ru/..." class="input-field">
+            
             <button id="preview-btn" class="btn-primary">👁️ Предпросмотр поста</button>
         </div>
 
         <!-- Шаг 6: Предпросмотр поста -->
         <div id="step-preview" class="step">
             <h2>Предпросмотр поста</h2>
-            <div id="preview-container" class="preview-container">
-                <div class="preview-header">
-                    <h3>📝 Ваш пост</h3>
-                </div>
+            <p class="hint">Так будет выглядеть ваш пост в Telegram:</p>
+            <div id="preview-container" class="preview-container telegram-preview">
                 <div id="preview-content" class="preview-content"></div>
+                <div id="preview-buttons" class="preview-buttons"></div>
             </div>
             <button id="edit-preview-btn" class="btn-secondary">✏️ Редактировать</button>
             <button id="submit-btn" class="btn-primary">📤 Отправить на модерацию</button>

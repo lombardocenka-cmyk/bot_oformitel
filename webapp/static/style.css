@@ -423,6 +423,83 @@ h2 {
     box-shadow: var(--shadow);
 }
 
+/* Telegram-стиль предпросмотра */
+.telegram-preview {
+    background: var(--tg-theme-bg-color, #ffffff);
+    border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+    border-radius: 12px;
+    padding: 16px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.5;
+}
+
+.preview-line {
+    margin: 4px 0;
+    color: var(--tg-theme-text-color, #000000);
+    word-wrap: break-word;
+}
+
+.preview-line strong {
+    font-weight: 700;
+}
+
+.preview-line em {
+    font-style: italic;
+    color: var(--tg-theme-hint-color, #666666);
+}
+
+.preview-separator {
+    color: var(--tg-theme-hint-color, #999999);
+    font-family: monospace;
+    margin: 8px 0;
+    font-size: 12px;
+}
+
+.preview-spec-line {
+    font-family: monospace;
+    color: var(--tg-theme-text-color, #000000);
+    margin: 2px 0;
+    font-size: 14px;
+}
+
+.preview-spacer {
+    height: 8px;
+}
+
+.preview-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+}
+
+.preview-button {
+    flex: 1;
+    min-width: 120px;
+    padding: 12px 20px;
+    background: var(--tg-theme-button-color, #3390ec);
+    color: var(--tg-theme-button-text-color, #ffffff);
+    text-decoration: none;
+    border-radius: 10px;
+    font-weight: 600;
+    text-align: center;
+    box-shadow: var(--shadow);
+    transition: all 0.3s ease;
+}
+
+.preview-button:hover {
+    opacity: 0.9;
+    transform: translateY(-2px);
+}
+
+label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--tg-theme-text-color, #000000);
+    font-size: 14px;
+}
+
 /* Прогресс-бар */
 .progress-bar {
     width: 100%;

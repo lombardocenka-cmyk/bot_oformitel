@@ -14,6 +14,10 @@ let state = {
     productName: null,
     specifications: {},
     photos: [],
+    price: null,
+    productId: null,
+    shopAddress: null,
+    shopProfileLink: null,
     avitoLink: null
 };
 
@@ -29,7 +33,7 @@ const steps = {
 };
 
 // Маппинг шагов для индикатора
-const stepOrder = ['category', 'name', 'specs', 'photos', 'link', 'preview'];
+const stepOrder = ['category', 'name', 'specs', 'photos', 'additional', 'preview'];
 
 // Переход к шагу
 function showStep(stepName) {
@@ -189,7 +193,49 @@ document.getElementById('photos-done-btn').addEventListener('click', () => {
     showStep('link');
 });
 
-// Шаг 5: Ссылка на Авито - Предпросмотр
+// Загрузка адресов магазинов
+async function loadShopAddresses() {
+    try {
+        const response = await fetch('/api/shop-addresses', {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            const select = document.getElementById('shop-address-select');
+            select.innerHTML = '<option value="">Выберите адрес...</option>';
+            
+            if (data.success && data.addresses) {
+                data.addresses.forEach(addr => {
+                    const option = document.createElement('option');
+                    option.value = addr.text;
+                    option.textContent = `${addr.name} - ${addr.text}`;
+                    select.appendChild(option);
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Error loading shop addresses:', error);
+    }
+}
+
+// Обработка выбора адреса магазина
+document.getElementById('shop-address-select').addEventListener('change', (e) => {
+    if (e.target.value) {
+        document.getElementById('shop-address-custom').value = '';
+        state.shopAddress = e.target.value;
+    }
+});
+
+document.getElementById('shop-address-custom').addEventListener('input', (e) => {
+    if (e.target.value.trim()) {
+        document.getElementById('shop-address-select').value = '';
+        state.shopAddress = e.target.value.trim();
+    }
+});
+
+// Шаг 5: Дополнительная информация - Предпросмотр
 document.getElementById('preview-btn').addEventListener('click', async () => {
     const avitoLink = document.getElementById('avito-link').value.trim();
     if (!avitoLink || !avitoLink.startsWith('http')) {
@@ -197,7 +243,19 @@ document.getElementById('preview-btn').addEventListener('click', async () => {
         return;
     }
     
+    const price = document.getElementById('product-price').value.trim();
+    const productId = document.getElementById('product-id').value.trim();
+    const shopProfileLink = document.getElementById('shop-profile-link').value.trim();
+    
+    if (!state.shopAddress) {
+        tg.showAlert('Выберите или введите адрес магазина');
+        return;
+    }
+    
     state.avitoLink = avitoLink;
+    state.price = price;
+    state.productId = productId;
+    state.shopProfileLink = shopProfileLink;
     
     // Получаем предпросмотр поста
     try {
@@ -212,7 +270,7 @@ document.getElementById('preview-btn').addEventListener('click', async () => {
         
         const data = await response.json();
         if (data.success) {
-            renderPreview(data.preview);
+            renderPreview(data);
             showStep('preview');
         } else {
             tg.showAlert(data.error || 'Ошибка при создании предпросмотра');
@@ -224,37 +282,54 @@ document.getElementById('preview-btn').addEventListener('click', async () => {
 });
 
 // Рендеринг предпросмотра
-function renderPreview(previewText) {
+function renderPreview(previewData) {
     const container = document.getElementById('preview-content');
+    const buttonsContainer = document.getElementById('preview-buttons');
     
-    // Парсим HTML из текста поста (если есть HTML теги)
+    // Парсим HTML из текста поста
+    const previewText = previewData.preview || previewData;
     const lines = previewText.split('\n');
     let html = '';
     
     lines.forEach(line => {
         if (line.trim()) {
-            // Обработка заголовков
-            if (line.includes('<b>') && line.includes('</b>')) {
-                html += `<div style="font-size: 18px; font-weight: 700; margin: 12px 0; color: var(--tg-theme-text-color);">${line}</div>`;
+            // Обработка HTML тегов
+            if (line.includes('<b>') || line.includes('<i>')) {
+                // Заменяем HTML теги на безопасные
+                let safeLine = line
+                    .replace(/<b>/g, '<strong>')
+                    .replace(/<\/b>/g, '</strong>')
+                    .replace(/<i>/g, '<em>')
+                    .replace(/<\/i>/g, '</em>');
+                html += `<div class="preview-line">${safeLine}</div>`;
+            }
+            // Обработка разделителей
+            else if (line.includes('━')) {
+                html += `<div class="preview-separator">${line}</div>`;
             }
             // Обработка характеристик
-            else if (line.startsWith('•')) {
-                html += `<div class="preview-spec-item"><span class="preview-spec-name">${line.replace('•', '').split(':')[0]}:</span><span class="preview-spec-value">${line.split(':').slice(1).join(':').trim()}</span></div>`;
-            }
-            // Обработка ссылок
-            else if (line.startsWith('http')) {
-                html += `<a href="${line}" target="_blank" class="preview-link">🛒 Купить на Авито</a>`;
+            else if (line.startsWith('│')) {
+                html += `<div class="preview-spec-line">${line}</div>`;
             }
             // Обычный текст
             else {
-                html += `<div style="margin: 8px 0; color: var(--tg-theme-text-color);">${line}</div>`;
+                html += `<div class="preview-line">${line}</div>`;
             }
         } else {
-            html += '<div style="height: 8px;"></div>';
+            html += '<div class="preview-spacer"></div>';
         }
     });
     
     container.innerHTML = html;
+    
+    // Рендеринг кнопок
+    let buttonsHtml = '';
+    if (previewData.buttons && previewData.buttons.length > 0) {
+        previewData.buttons.forEach(btn => {
+            buttonsHtml += `<a href="${btn.url}" target="_blank" class="preview-button">${btn.text}</a>`;
+        });
+    }
+    buttonsContainer.innerHTML = buttonsHtml;
 }
 
 // Редактирование из предпросмотра

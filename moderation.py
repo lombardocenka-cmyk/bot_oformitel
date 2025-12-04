@@ -149,7 +149,7 @@ async def publish_post(post_id: int, post: dict):
                 CHANNEL_ID,
                 photos[0],
                 caption=post["post_text"],
-                reply_markup=buy_keyboard.as_markup(),
+                reply_markup=post_keyboard.as_markup(),
                 parse_mode="HTML"
             )
         else:
@@ -161,18 +161,18 @@ async def publish_post(post_id: int, post: dict):
             
             sent_messages = await globals_module.bot.send_media_group(CHANNEL_ID, media)
             
-            # Добавляем кнопку к последнему сообщению
+            # Добавляем кнопки к последнему сообщению
             await globals_module.bot.edit_message_reply_markup(
                 CHANNEL_ID,
                 sent_messages[-1].message_id,
-                reply_markup=buy_keyboard.as_markup()
+                reply_markup=post_keyboard.as_markup()
             )
     else:
         # Только текст
         await globals_module.bot.send_message(
             CHANNEL_ID,
             post["post_text"],
-            reply_markup=buy_keyboard.as_markup(),
+            reply_markup=post_keyboard.as_markup(),
             parse_mode="HTML"
         )
     

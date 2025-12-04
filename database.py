@@ -70,10 +70,23 @@ class Database:
                 )
             """)
             
+            # Таблица адресов магазинов
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS shop_addresses (
+                    address_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    address_name TEXT NOT NULL,
+                    address_text TEXT NOT NULL,
+                    created_at TEXT
+                )
+            """)
+            
             await db.commit()
             
             # Инициализация дефолтных категорий, если их нет
             await self._init_default_categories()
+            
+            # Инициализация дефолтных адресов магазинов, если их нет
+            await self._init_default_shop_addresses()
 
     async def add_user(self, user_id: int, username: str = None, full_name: str = None):
         """Добавить пользователя"""
@@ -226,6 +239,28 @@ class Database:
                 
                 await db.commit()
 
+    async def _init_default_shop_addresses(self):
+        """Инициализация дефолтных адресов магазинов"""
+        async with aiosqlite.connect(self.db_path) as db:
+            # Проверяем, есть ли адреса
+            async with db.execute("SELECT COUNT(*) FROM shop_addresses") as cursor:
+                count = (await cursor.fetchone())[0]
+            
+            if count == 0:
+                # Добавляем дефолтные адреса
+                default_addresses = [
+                    ("Главный магазин", "г. Москва, ул. Примерная, д. 1"),
+                    ("Филиал 1", "г. Санкт-Петербург, пр. Невский, д. 10"),
+                ]
+                
+                for name, address in default_addresses:
+                    await db.execute("""
+                        INSERT INTO shop_addresses (address_name, address_text, created_at)
+                        VALUES (?, ?, ?)
+                    """, (name, address, datetime.now().isoformat()))
+                
+                await db.commit()
+
     async def get_categories(self) -> List[tuple]:
         """Получить все категории"""
         async with aiosqlite.connect(self.db_path) as db:
@@ -329,4 +364,40 @@ class Database:
                 stats['rejected'] = (await cursor.fetchone())[0]
             
             return stats
+
+    async def get_shop_addresses(self) -> List[tuple]:
+        """Получить все адреса магазинов"""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT address_id, address_name, address_text
+                FROM shop_addresses
+                ORDER BY address_id
+            """) as cursor:
+                return await cursor.fetchall()
+
+    async def add_shop_address(self, name: str, address: str) -> int:
+        """Добавить адрес магазина"""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("""
+                INSERT INTO shop_addresses (address_name, address_text, created_at)
+                VALUES (?, ?, ?)
+            """, (name, address, datetime.now().isoformat()))
+            await db.commit()
+            return cursor.lastrowid
+
+    async def delete_shop_address(self, address_id: int):
+        """Удалить адрес магазина"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("DELETE FROM shop_addresses WHERE address_id = ?", (address_id,))
+            await db.commit()
+
+    async def get_shop_address(self, address_id: int) -> Optional[tuple]:
+        """Получить адрес магазина по ID"""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT address_id, address_name, address_text
+                FROM shop_addresses
+                WHERE address_id = ?
+            """, (address_id,)) as cursor:
+                return await cursor.fetchone()
 

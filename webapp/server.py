@@ -55,6 +55,27 @@ async def index():
     with open(index_path, "r", encoding="utf-8") as f:
         return f.read()
 
+@app.get("/api/shop-addresses")
+async def get_shop_addresses(request: Request):
+    """Получить список адресов магазинов"""
+    try:
+        import globals as globals_module
+        addresses = await globals_module.db.get_shop_addresses()
+        
+        return JSONResponse({
+            "success": True,
+            "addresses": [
+                {"id": addr[0], "name": addr[1], "text": addr[2]}
+                for addr in addresses
+            ]
+        })
+    except Exception as e:
+        logger.error(f"Error getting shop addresses: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
 @app.get("/health")
 async def health_check_get():
     """Health check endpoint для предотвращения спиндауна (GET)"""
@@ -157,18 +178,24 @@ async def preview_post(request: Request):
         product_name = data.get("productName")
         specifications = data.get("specifications", {})
         avito_link = data.get("avitoLink")
+        price = data.get("price")
+        product_id = data.get("productId")
+        shop_address = data.get("shopAddress")
+        shop_profile_link = data.get("shopProfileLink")
         
         if not all([category, product_name, avito_link]):
             return JSONResponse(
                 status_code=400,
-                content={"success": False, "error": "Не все поля заполнены"}
+                content={"success": False, "error": "Не все обязательные поля заполнены"}
             )
         
         # Импортируем функцию форматирования
         try:
+            import globals as globals_module
             from post_formatter import format_post
         except ImportError:
             sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            import globals as globals_module
             from post_formatter import format_post
         
         # Формируем предпросмотр поста
@@ -176,12 +203,31 @@ async def preview_post(request: Request):
             product_name,
             category,
             specifications,
-            avito_link
+            avito_link,
+            price=price,
+            product_id=product_id,
+            shop_address=shop_address,
+            shop_profile_link=shop_profile_link
         )
+        
+        # Формируем кнопки
+        buttons = []
+        if shop_profile_link:
+            # Нормализуем ссылку на профиль
+            profile_url = shop_profile_link
+            if not profile_url.startswith('http'):
+                if profile_url.startswith('@'):
+                    profile_url = f"https://t.me/{profile_url[1:]}"
+                else:
+                    profile_url = f"https://t.me/{profile_url}"
+            buttons.append({"text": "💬 Написать в магазин", "url": profile_url})
+        
+        buttons.append({"text": "🛒 Купить на Авито", "url": avito_link})
         
         return JSONResponse({
             "success": True,
-            "preview": preview_text
+            "preview": preview_text,
+            "buttons": buttons
         })
         
     except Exception as e:
@@ -219,11 +265,15 @@ async def create_post(request: Request):
         specifications = data.get("specifications", {})
         photos = data.get("photos", [])
         avito_link = data.get("avitoLink")
+        price = data.get("price")
+        product_id = data.get("productId")
+        shop_address = data.get("shopAddress")
+        shop_profile_link = data.get("shopProfileLink")
         
         if not all([category, product_name, avito_link]):
             return JSONResponse(
                 status_code=400,
-                content={"success": False, "error": "Не все поля заполнены"}
+                content={"success": False, "error": "Не все обязательные поля заполнены"}
             )
         
         # Импортируем необходимые модули
@@ -242,15 +292,30 @@ async def create_post(request: Request):
             product_name,
             category,
             specifications,
-            avito_link
+            avito_link,
+            price=price,
+            product_id=product_id,
+            shop_address=shop_address,
+            shop_profile_link=shop_profile_link
         )
         
-        # Сохраняем в базу данных
+        # Сохраняем в базу данных (расширяем для новых полей)
+        # Временно сохраняем дополнительные данные в specifications
+        extended_specs = specifications.copy()
+        if price:
+            extended_specs['_price'] = price
+        if product_id:
+            extended_specs['_product_id'] = product_id
+        if shop_address:
+            extended_specs['_shop_address'] = shop_address
+        if shop_profile_link:
+            extended_specs['_shop_profile_link'] = shop_profile_link
+        
         post_id = await globals_module.db.create_post(
             user_id=user_id,
             category=category,
             product_name=product_name,
-            specifications=specifications,
+            specifications=extended_specs,
             photos=photos,  # В реальности нужно загрузить фото на сервер
             avito_link=avito_link
         )
@@ -261,8 +326,19 @@ async def create_post(request: Request):
         from config import ADMIN_ID
         from aiogram.utils.keyboard import InlineKeyboardBuilder
         
-        buy_keyboard = InlineKeyboardBuilder()
-        buy_keyboard.button(text="🛒 Купить на Авито", url=avito_link)
+        # Кнопки для поста (две кнопки)
+        post_keyboard = InlineKeyboardBuilder()
+        if shop_profile_link:
+            # Нормализуем ссылку на профиль
+            profile_url = shop_profile_link
+            if not profile_url.startswith('http'):
+                if profile_url.startswith('@'):
+                    profile_url = f"https://t.me/{profile_url[1:]}"
+                else:
+                    profile_url = f"https://t.me/{profile_url}"
+            post_keyboard.button(text="💬 Написать в магазин", url=profile_url)
+        post_keyboard.button(text="🛒 Купить на Авито", url=avito_link)
+        post_keyboard.adjust(2)
         
         moderation_keyboard = InlineKeyboardBuilder()
         moderation_keyboard.button(text="✅ Одобрить", callback_data=f"approve_{post_id}")
