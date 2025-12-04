@@ -27,7 +27,7 @@ const steps = {
     name: document.getElementById('step-name'),
     specs: document.getElementById('step-specs'),
     photos: document.getElementById('step-photos'),
-    link: document.getElementById('step-link'),
+    additional: document.getElementById('step-additional'),
     preview: document.getElementById('step-preview'),
     success: document.getElementById('step-success')
 };
@@ -37,8 +37,12 @@ const stepOrder = ['category', 'name', 'specs', 'photos', 'additional', 'preview
 
 // Переход к шагу
 function showStep(stepName) {
-    Object.values(steps).forEach(step => step.classList.remove('active'));
-    if (steps[stepName]) {
+    Object.values(steps).forEach(step => {
+        if (step) {
+            step.classList.remove('active');
+        }
+    });
+    if (steps[stepName] && steps[stepName] !== null) {
         steps[stepName].classList.add('active');
     }
     updateStepIndicator(stepName);
@@ -334,7 +338,7 @@ function renderPreview(previewData) {
 
 // Редактирование из предпросмотра
 document.getElementById('edit-preview-btn').addEventListener('click', () => {
-    showStep('link');
+    showStep('additional');
 });
 
 // Шаг 6: Отправка поста
