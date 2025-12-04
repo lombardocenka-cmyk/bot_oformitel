@@ -10,6 +10,7 @@ import logging
 import os
 import sys
 from typing import Dict, Any
+from datetime import datetime
 
 # Добавляем корневую директорию в путь для импорта модулей
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -52,6 +53,16 @@ async def index():
     index_path = os.path.join(STATIC_DIR, "index.html")
     with open(index_path, "r", encoding="utf-8") as f:
         return f.read()
+
+@app.get("/health")
+@app.get("/ping")
+async def health_check():
+    """Health check endpoint для предотвращения спиндауна"""
+    return JSONResponse({
+        "status": "ok",
+        "service": "telegram-miniapp",
+        "timestamp": datetime.now().isoformat()
+    })
 
 @app.post("/api/search-specs")
 async def search_specs(request: Request):
