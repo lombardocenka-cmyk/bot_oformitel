@@ -26,24 +26,49 @@ async def approve_post(callback: CallbackQuery, state: FSMContext):
         await callback.answer("❌ У вас нет прав для модерации!", show_alert=True)
         return
     
-    post_id = int(callback.data.split("_")[1])
-    post = await globals_module.db.get_post(post_id)
+    try:
+        # Парсим post_id из callback_data (формат: "approve_123")
+        post_id = int(callback.data.split("_")[1])
+    except (ValueError, IndexError):
+        await callback.answer("❌ Ошибка: неверный формат данных!", show_alert=True)
+        return
+    
+    try:
+        post = await globals_module.db.get_post(post_id)
+    except Exception as e:
+        await callback.answer(f"❌ Ошибка при получении поста: {str(e)}", show_alert=True)
+        return
     
     if not post:
         await callback.answer("❌ Пост не найден!", show_alert=True)
         return
     
     # Обновляем статус
-    await globals_module.db.update_post_status(post_id, "approved")
+    try:
+        await globals_module.db.update_post_status(post_id, "approved")
+    except Exception as e:
+        await callback.answer(f"❌ Ошибка при обновлении статуса: {str(e)}", show_alert=True)
+        return
     
     # Запрашиваем время публикации
-    await callback.message.edit_text(
-        f"✅ Пост одобрен!\n\n"
-        f"📅 Укажите время публикации в формате:\n"
-        f"• <b>DD.MM.YYYY HH:MM</b> (например: 25.12.2024 15:30)\n"
-        f"• или <b>now</b> для немедленной публикации",
-        parse_mode="HTML"
-    )
+    try:
+        await callback.message.edit_text(
+            f"✅ Пост одобрен!\n\n"
+            f"📅 Укажите время публикации в формате:\n"
+            f"• <b>DD.MM.YYYY HH:MM</b> (например: 25.12.2024 15:30)\n"
+            f"• или <b>now</b> для немедленной публикации",
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        # Если не удалось отредактировать сообщение, отправляем новое
+        await callback.message.answer(
+            f"✅ Пост одобрен!\n\n"
+            f"📅 Укажите время публикации в формате:\n"
+            f"• <b>DD.MM.YYYY HH:MM</b> (например: 25.12.2024 15:30)\n"
+            f"• или <b>now</b> для немедленной публикации",
+            parse_mode="HTML"
+        )
+    
     await callback.answer()
     
     await state.update_data(post_id=post_id)
@@ -56,15 +81,29 @@ async def reject_post(callback: CallbackQuery):
         await callback.answer("❌ У вас нет прав для модерации!", show_alert=True)
         return
     
-    post_id = int(callback.data.split("_")[1])
-    post = await globals_module.db.get_post(post_id)
+    try:
+        # Парсим post_id из callback_data (формат: "reject_123")
+        post_id = int(callback.data.split("_")[1])
+    except (ValueError, IndexError):
+        await callback.answer("❌ Ошибка: неверный формат данных!", show_alert=True)
+        return
+    
+    try:
+        post = await globals_module.db.get_post(post_id)
+    except Exception as e:
+        await callback.answer(f"❌ Ошибка при получении поста: {str(e)}", show_alert=True)
+        return
     
     if not post:
         await callback.answer("❌ Пост не найден!", show_alert=True)
         return
     
     # Обновляем статус
-    await globals_module.db.update_post_status(post_id, "rejected")
+    try:
+        await globals_module.db.update_post_status(post_id, "rejected")
+    except Exception as e:
+        await callback.answer(f"❌ Ошибка при обновлении статуса: {str(e)}", show_alert=True)
+        return
     
     # Уведомляем автора
     try:
@@ -77,7 +116,12 @@ async def reject_post(callback: CallbackQuery):
     except:
         pass
     
-    await callback.message.edit_text("❌ Пост отклонен")
+    try:
+        await callback.message.edit_text("❌ Пост отклонен")
+    except:
+        # Если не удалось отредактировать сообщение, отправляем новое
+        await callback.message.answer("❌ Пост отклонен")
+    
     await callback.answer()
 
 @router.message(Moderation.waiting_schedule_time)
@@ -159,9 +203,17 @@ async def publish_post(post_id: int, post: dict):
     post_keyboard.adjust(2)
     
     # Отправляем фотографии с текстом в одном сообщении
-    photos = post["photos"]
+    photos = post.get("photos", [])
     
-    if photos:
+    # Обрабатываем photos, если это строка JSON
+    if isinstance(photos, str):
+        import json
+        try:
+            photos = json.loads(photos)
+        except:
+            photos = []
+    
+    if photos and len(photos) > 0:
         if len(photos) == 1:
             # Одна фотография с текстом
             await globals_module.bot.send_photo(
