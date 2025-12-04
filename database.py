@@ -80,6 +80,19 @@ class Database:
                 )
             """)
             
+            # Таблица шаблонов постов
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS post_templates (
+                    template_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    category_id INTEGER,
+                    template_name TEXT NOT NULL,
+                    template_text TEXT NOT NULL,
+                    is_default INTEGER DEFAULT 0,
+                    created_at TEXT,
+                    FOREIGN KEY (category_id) REFERENCES categories (category_id)
+                )
+            """)
+            
             await db.commit()
             
             # Инициализация дефолтных категорий, если их нет

@@ -393,7 +393,7 @@ async def process_avito_link(message: Message, state: FSMContext):
     data = await state.get_data()
     
     # Формируем пост с новыми полями
-    post_text = format_post(
+    post_text = await format_post(
         data.get("product_name"),
         data.get("category"),
         data.get("specifications", {}),

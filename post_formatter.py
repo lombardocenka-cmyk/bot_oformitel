@@ -1,7 +1,8 @@
 from typing import Dict, List, Optional
 from config import CATEGORIES
+import globals as globals_module
 
-def format_post(product_name: str, category: str, specifications: Dict[str, str], 
+async def format_post(product_name: str, category: str, specifications: Dict[str, str], 
                 avito_link: str, price: Optional[str] = None, product_id: Optional[str] = None,
                 shop_address: Optional[str] = None, shop_profile_link: Optional[str] = None) -> str:
     """
@@ -15,6 +16,51 @@ def format_post(product_name: str, category: str, specifications: Dict[str, str]
         "other": "🔧"
     }
     
+    # Пытаемся получить шаблон из БД
+    template_text = None
+    if globals_module.db:
+        try:
+            # Получаем category_id из названия категории
+            categories = await globals_module.db.get_categories()
+            category_id = None
+            for cat_id, cat_name, cat_emoji in categories:
+                if category in cat_name.lower() or cat_name.lower() in category:
+                    category_id = cat_id
+                    break
+            
+            if category_id:
+                template = await globals_module.db.get_post_template(category_id)
+                if template:
+                    template_text = template[2]  # template_text
+        except:
+            pass
+    
+    # Если есть шаблон, используем его
+    if template_text:
+        # Заменяем переменные в шаблоне
+        post = template_text
+        post = post.replace("{product_name}", product_name)
+        post = post.replace("{category}", CATEGORIES.get(category, "Техника"))
+        post = post.replace("{price}", price or "Не указана")
+        post = post.replace("{product_id}", product_id or "Не указан")
+        post = post.replace("{shop_address}", shop_address or "Не указан")
+        post = post.replace("{shop_profile_link}", shop_profile_link or "")
+        post = post.replace("{avito_link}", avito_link)
+        
+        # Заменяем характеристики
+        specs_text = ""
+        for spec_name, spec_value in specifications.items():
+            if spec_value and spec_value.strip() and spec_value != "Не указано":
+                specs_text += f"│ <b>{spec_name}</b>: {spec_value}\n"
+        
+        if not specs_text:
+            specs_text = "│ Характеристики не указаны\n"
+        
+        post = post.replace("{specifications}", specs_text)
+        
+        return post
+    
+    # Если шаблона нет, используем дефолтное форматирование
     emoji = category_emoji.get(category, "📦")
     category_name = CATEGORIES.get(category, "Техника")
     
