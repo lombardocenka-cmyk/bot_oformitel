@@ -390,8 +390,12 @@ async def process_product_id(message: Message, state: FSMContext):
 async def process_shop_address_callback(callback: CallbackQuery, state: FSMContext):
     """Обработка выбора адреса магазина из списка"""
     if callback.data == "shop_address_custom":
-        await callback.message.edit_text("📍 Введите адрес магазина:")
+        await callback.message.edit_text("📍 Введите адрес магазина:", reply_markup=get_cancel_keyboard())
         await callback.answer()
+        return
+    
+    if callback.data == "cancel_post":
+        await cancel_post_callback(callback, state)
         return
     
     address_id = int(callback.data.split("_")[-1])
@@ -401,7 +405,8 @@ async def process_shop_address_callback(callback: CallbackQuery, state: FSMConte
         await state.update_data(shop_address=address[2])
         await callback.message.edit_text(
             f"✅ Адрес выбран: {address[2]}\n\n"
-            "💬 Введите ссылку на профиль для покупки (например: @username или https://t.me/username) или /skip:"
+            "💬 Введите ссылку на профиль для покупки (например: @username или https://t.me/username) или /skip:",
+            reply_markup=get_cancel_keyboard()
         )
         await callback.answer()
         await state.set_state(PostCreation.waiting_shop_profile_link)
