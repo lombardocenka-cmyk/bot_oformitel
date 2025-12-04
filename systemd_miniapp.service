@@ -1,0 +1,24 @@
+[Unit]
+Description=Mini App FastAPI Server
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/miniapp
+Environment="PATH=/usr/bin:/usr/local/bin"
+Environment="PYTHONPATH=/var/www/miniapp"
+ExecStart=/usr/local/bin/uvicorn webapp.server:app --host 127.0.0.1 --port 8000 --workers 4
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Безопасность
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+

@@ -1,0 +1,221 @@
+"""
+Веб-сервер для Telegram Mini App
+"""
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+import json
+import logging
+import os
+import sys
+from typing import Dict, Any
+
+# Добавляем корневую директорию в путь для импорта модулей
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from aiogram.utils.web_app import safe_parse_webapp_init_data
+from config import BOT_TOKEN
+
+logger = logging.getLogger(__name__)
+
+app = FastAPI(title="Telegram Mini App Server")
+
+# CORS для работы с Telegram
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+import os
+
+# Определяем путь к статическим файлам
+# Работает как для разработки, так и для продакшена
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+
+# Если статики нет в текущей директории, ищем в корне проекта
+if not os.path.exists(STATIC_DIR):
+    # Для продакшена, когда файлы в /var/www/miniapp
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    STATIC_DIR = os.path.join(BASE_DIR, "webapp", "static")
+
+# Подключение статических файлов
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    """Главная страница Mini App"""
+    index_path = os.path.join(STATIC_DIR, "index.html")
+    with open(index_path, "r", encoding="utf-8") as f:
+        return f.read()
+
+@app.post("/api/search-specs")
+async def search_specs(request: Request):
+    """Поиск характеристик товара"""
+    try:
+        data = await request.json()
+        init_data = data.get("init_data")
+        
+        # Валидация initData
+        try:
+            web_app_data = safe_parse_webapp_init_data(BOT_TOKEN, init_data)
+        except ValueError as e:
+            logger.error(f"Invalid init data: {e}")
+            return JSONResponse(
+                status_code=401,
+                content={"success": False, "error": "Неверные данные авторизации"}
+            )
+        
+        # Импортируем функцию поиска
+        try:
+            from product_search import search_product_specs
+        except ImportError:
+            sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            from product_search import search_product_specs
+        
+        product_name = data.get("product_name")
+        category = data.get("category")
+        
+        if not product_name or not category:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "Не указаны название товара или категория"}
+            )
+        
+        # Поиск характеристик
+        specs = await search_product_specs(product_name, category)
+        
+        return JSONResponse({
+            "success": True,
+            "specifications": specs
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in search_specs: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
+@app.post("/api/create-post")
+async def create_post(request: Request):
+    """Создание поста через Mini App"""
+    try:
+        data = await request.json()
+        init_data = data.get("init_data")
+        
+        # Валидация initData
+        try:
+            web_app_data = safe_parse_webapp_init_data(BOT_TOKEN, init_data)
+            user_id = web_app_data.user.id
+        except ValueError as e:
+            logger.error(f"Invalid init data: {e}")
+            return JSONResponse(
+                status_code=401,
+                content={"success": False, "error": "Неверные данные авторизации"}
+            )
+        
+        # Получаем данные поста
+        category = data.get("category")
+        product_name = data.get("productName")
+        specifications = data.get("specifications", {})
+        photos = data.get("photos", [])
+        avito_link = data.get("avitoLink")
+        
+        if not all([category, product_name, avito_link]):
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "Не все поля заполнены"}
+            )
+        
+        # Импортируем необходимые модули
+        # Используем относительный импорт для работы на Railway
+        try:
+            import globals as globals_module
+            from post_formatter import format_post
+        except ImportError:
+            # Для Railway может потребоваться абсолютный импорт
+            sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            import globals as globals_module
+            from post_formatter import format_post
+        
+        # Формируем пост
+        post_text = format_post(
+            product_name,
+            category,
+            specifications,
+            avito_link
+        )
+        
+        # Сохраняем в базу данных
+        post_id = await globals_module.db.create_post(
+            user_id=user_id,
+            category=category,
+            product_name=product_name,
+            specifications=specifications,
+            photos=photos,  # В реальности нужно загрузить фото на сервер
+            avito_link=avito_link
+        )
+        
+        await globals_module.db.update_post_text(post_id, post_text)
+        
+        # Отправляем администратору на модерацию
+        from config import ADMIN_ID
+        from aiogram.utils.keyboard import InlineKeyboardBuilder
+        
+        buy_keyboard = InlineKeyboardBuilder()
+        buy_keyboard.button(text="🛒 Купить", url=avito_link)
+        
+        moderation_keyboard = InlineKeyboardBuilder()
+        moderation_keyboard.button(text="✅ Одобрить", callback_data=f"approve_{post_id}")
+        moderation_keyboard.button(text="❌ Отклонить", callback_data=f"reject_{post_id}")
+        moderation_keyboard.adjust(2)
+        
+        try:
+            # Отправляем пост администратору
+            await globals_module.bot.send_message(
+                ADMIN_ID,
+                f"📝 <b>Новый пост на модерацию (Mini App)</b>\n\n"
+                f"Автор: {web_app_data.user.first_name or 'Пользователь'}\n"
+                f"ID поста: {post_id}\n\n"
+                f"{post_text}",
+                parse_mode="HTML"
+            )
+            
+            # Отправляем фотографии (если есть)
+            if photos:
+                # В реальности нужно загрузить фото на сервер и отправить file_id
+                # Здесь упрощенная версия
+                pass
+            
+            # Клавиатура для модерации
+            await globals_module.bot.send_message(
+                ADMIN_ID,
+                "Выберите действие:",
+                reply_markup=moderation_keyboard.as_markup()
+            )
+        except Exception as e:
+            logger.error(f"Error sending to admin: {e}")
+            # Продолжаем даже если не удалось отправить администратору
+        
+        return JSONResponse({
+            "success": True,
+            "post_id": post_id,
+            "message": "Пост создан и отправлен на модерацию"
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in create_post: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Создание поста</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📝 Создание поста</h1>
+        </div>
+
+        <!-- Шаг 1: Выбор категории -->
+        <div id="step-category" class="step active">
+            <h2>Выберите категорию товара</h2>
+            <div class="category-grid">
+                <button class="category-btn" data-category="android">
+                    📱 Смартфон (Android)
+                </button>
+                <button class="category-btn" data-category="apple">
+                    🍎 Смартфон (Apple)
+                </button>
+                <button class="category-btn" data-category="laptop">
+                    💻 Ноутбук
+                </button>
+                <button class="category-btn" data-category="pc">
+                    🖥️ ПК
+                </button>
+                <button class="category-btn" data-category="other">
+                    🔧 Другая техника
+                </button>
+            </div>
+        </div>
+
+        <!-- Шаг 2: Название товара -->
+        <div id="step-name" class="step">
+            <h2>Введите название товара</h2>
+            <input type="text" id="product-name" placeholder="Например: iPhone 15 Pro Max" class="input-field">
+            <button id="search-specs-btn" class="btn-primary">🔍 Найти характеристики</button>
+            <div id="loading" class="loading hidden">Ищу характеристики...</div>
+        </div>
+
+        <!-- Шаг 3: Характеристики -->
+        <div id="step-specs" class="step">
+            <h2>Характеристики товара</h2>
+            <div id="specs-container"></div>
+            <button id="confirm-specs-btn" class="btn-primary">✅ Подтвердить</button>
+            <button id="edit-specs-btn" class="btn-secondary">✏️ Изменить</button>
+        </div>
+
+        <!-- Шаг 4: Фотографии -->
+        <div id="step-photos" class="step">
+            <h2>Фотографии товара</h2>
+            <p class="hint">Можно загрузить до 12 фотографий</p>
+            <input type="file" id="photo-input" accept="image/*" multiple class="hidden">
+            <button id="add-photo-btn" class="btn-secondary">📸 Добавить фото</button>
+            <div id="photos-preview" class="photos-grid"></div>
+            <button id="photos-done-btn" class="btn-primary">✅ Готово</button>
+        </div>
+
+        <!-- Шаг 5: Ссылка на Авито -->
+        <div id="step-link" class="step">
+            <h2>Ссылка на объявление Авито</h2>
+            <input type="url" id="avito-link" placeholder="https://www.avito.ru/..." class="input-field">
+            <button id="submit-btn" class="btn-primary">📤 Отправить на модерацию</button>
+        </div>
+
+        <!-- Шаг 6: Успех -->
+        <div id="step-success" class="step">
+            <div class="success-message">
+                <h2>✅ Пост создан!</h2>
+                <p>Ваш пост отправлен на модерацию администратору.</p>
+                <p>Ожидайте одобрения.</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
+

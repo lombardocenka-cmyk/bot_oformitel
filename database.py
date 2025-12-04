@@ -1,0 +1,181 @@
+import aiosqlite
+from datetime import datetime
+from typing import Optional, List, Dict
+import json
+
+class Database:
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+
+    async def init_db(self):
+        """Инициализация базы данных"""
+        async with aiosqlite.connect(self.db_path) as db:
+            # Таблица пользователей
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id INTEGER PRIMARY KEY,
+                    username TEXT,
+                    full_name TEXT,
+                    is_admin INTEGER DEFAULT 0,
+                    created_at TEXT
+                )
+            """)
+            
+            # Таблица постов
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS posts (
+                    post_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    category TEXT,
+                    product_name TEXT,
+                    specifications TEXT,
+                    photos TEXT,
+                    avito_link TEXT,
+                    post_text TEXT,
+                    status TEXT DEFAULT 'pending',
+                    scheduled_time TEXT,
+                    created_at TEXT,
+                    FOREIGN KEY (user_id) REFERENCES users (user_id)
+                )
+            """)
+            
+            # Таблица характеристик (для редактирования)
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS post_specs (
+                    spec_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    post_id INTEGER,
+                    spec_name TEXT,
+                    spec_value TEXT,
+                    FOREIGN KEY (post_id) REFERENCES posts (post_id)
+                )
+            """)
+            
+            await db.commit()
+
+    async def add_user(self, user_id: int, username: str = None, full_name: str = None):
+        """Добавить пользователя"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                INSERT OR IGNORE INTO users (user_id, username, full_name, created_at)
+                VALUES (?, ?, ?, ?)
+            """, (user_id, username, full_name, datetime.now().isoformat()))
+            await db.commit()
+
+    async def is_admin(self, user_id: int) -> bool:
+        """Проверить, является ли пользователь администратором"""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("SELECT is_admin FROM users WHERE user_id = ?", (user_id,)) as cursor:
+                row = await cursor.fetchone()
+                return row[0] == 1 if row else False
+
+    async def create_post(self, user_id: int, category: str, product_name: str, 
+                         specifications: Dict, photos: List[str], avito_link: str) -> int:
+        """Создать новый пост"""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("""
+                INSERT INTO posts (user_id, category, product_name, specifications, 
+                                 photos, avito_link, created_at, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+            """, (
+                user_id,
+                category,
+                product_name,
+                json.dumps(specifications, ensure_ascii=False),
+                json.dumps(photos, ensure_ascii=False),
+                avito_link,
+                datetime.now().isoformat()
+            ))
+            post_id = cursor.lastrowid
+            await db.commit()
+            return post_id
+
+    async def update_post_text(self, post_id: int, post_text: str):
+        """Обновить текст поста"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                UPDATE posts SET post_text = ? WHERE post_id = ?
+            """, (post_text, post_id))
+            await db.commit()
+
+    async def update_post_status(self, post_id: int, status: str, scheduled_time: str = None):
+        """Обновить статус поста"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                UPDATE posts SET status = ?, scheduled_time = ? WHERE post_id = ?
+            """, (status, scheduled_time, post_id))
+            await db.commit()
+
+    async def get_post(self, post_id: int) -> Optional[Dict]:
+        """Получить пост по ID"""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT post_id, user_id, category, product_name, specifications,
+                       photos, avito_link, post_text, status, scheduled_time, created_at
+                FROM posts WHERE post_id = ?
+            """, (post_id,)) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    return {
+                        "post_id": row[0],
+                        "user_id": row[1],
+                        "category": row[2],
+                        "product_name": row[3],
+                        "specifications": json.loads(row[4]),
+                        "photos": json.loads(row[5]),
+                        "avito_link": row[6],
+                        "post_text": row[7],
+                        "status": row[8],
+                        "scheduled_time": row[9],
+                        "created_at": row[10]
+                    }
+                return None
+
+    async def get_pending_posts(self) -> List[Dict]:
+        """Получить все посты на модерации"""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT post_id, user_id, category, product_name, specifications,
+                       photos, avito_link, post_text, status, scheduled_time, created_at
+                FROM posts WHERE status = 'pending'
+                ORDER BY created_at DESC
+            """) as cursor:
+                rows = await cursor.fetchall()
+                return [{
+                    "post_id": row[0],
+                    "user_id": row[1],
+                    "category": row[2],
+                    "product_name": row[3],
+                    "specifications": json.loads(row[4]),
+                    "photos": json.loads(row[5]),
+                    "avito_link": row[6],
+                    "post_text": row[7],
+                    "status": row[8],
+                    "scheduled_time": row[9],
+                    "created_at": row[10]
+                } for row in rows]
+
+    async def get_scheduled_posts(self) -> List[Dict]:
+        """Получить запланированные посты"""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT post_id, user_id, category, product_name, specifications,
+                       photos, avito_link, post_text, status, scheduled_time, created_at
+                FROM posts WHERE status = 'approved' AND scheduled_time IS NOT NULL
+                ORDER BY scheduled_time ASC
+            """) as cursor:
+                rows = await cursor.fetchall()
+                return [{
+                    "post_id": row[0],
+                    "user_id": row[1],
+                    "category": row[2],
+                    "product_name": row[3],
+                    "specifications": json.loads(row[4]),
+                    "photos": json.loads(row[5]),
+                    "avito_link": row[6],
+                    "post_text": row[7],
+                    "status": row[8],
+                    "scheduled_time": row[9],
+                    "created_at": row[10]
+                } for row in rows]
+
+
