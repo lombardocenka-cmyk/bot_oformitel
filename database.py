@@ -302,6 +302,37 @@ class Database:
                 
                 await db.commit()
 
+    async def _init_default_post_steps(self):
+        """Инициализация дефолтных шагов процесса создания поста"""
+        async with aiosqlite.connect(self.db_path) as db:
+            # Проверяем, есть ли шаги
+            async with db.execute("SELECT COUNT(*) FROM post_steps") as cursor:
+                count = (await cursor.fetchone())[0]
+            
+            if count == 0:
+                # Добавляем дефолтные шаги
+                import json
+                default_steps = [
+                    (1, "Выбор категории", "category", "{}"),
+                    (2, "Название товара", "text", "{}"),
+                    (3, "Характеристики", "specs", "{}"),
+                    (4, "Фотографии", "photos", "{}"),
+                    (5, "Состояние товара", "choice", json.dumps({"choices": ["Отличное", "Хорошее", "Удовлетворительное", "Плохое"]}, ensure_ascii=False)),
+                    (6, "Цена", "text", "{}"),
+                    (7, "Артикул", "text", "{}"),
+                    (8, "Адрес магазина", "text", "{}"),
+                    (9, "Ссылка на профиль", "text", "{}"),
+                    (10, "Ссылка на Авито", "text", "{}"),
+                ]
+                
+                for order, name, step_type, config in default_steps:
+                    await db.execute("""
+                        INSERT INTO post_steps (step_order, step_name, step_type, step_config, is_active, created_at)
+                        VALUES (?, ?, ?, ?, 1, ?)
+                    """, (order, name, step_type, config, datetime.now().isoformat()))
+                
+                await db.commit()
+
     async def get_categories(self) -> List[tuple]:
         """Получить все категории"""
         async with aiosqlite.connect(self.db_path) as db:
