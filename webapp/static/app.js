@@ -118,9 +118,14 @@ function renderSpecs() {
     for (const [key, value] of Object.entries(state.specifications)) {
         const div = document.createElement('div');
         div.className = 'spec-item';
+        
+        // Если значение "Не указано", делаем поле пустым с placeholder
+        const displayValue = (value && value !== "Не указано") ? value : "";
+        const placeholder = `Введите ${key.toLowerCase()}`;
+        
         div.innerHTML = `
             <label>${key}</label>
-            <input type="text" data-spec="${key}" value="${value}" />
+            <input type="text" data-spec="${key}" value="${displayValue}" placeholder="${placeholder}" />
         `;
         container.appendChild(div);
     }
