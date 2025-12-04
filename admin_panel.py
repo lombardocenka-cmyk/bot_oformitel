@@ -272,11 +272,29 @@ async def admin_confirm_delete(callback: CallbackQuery):
     category_id = int(callback.data.split("_")[-1])
     await globals_module.db.delete_category(category_id)
     
-    await callback.message.edit_text("✅ Категория удалена!")
-    await callback.answer()
+    await callback.answer("✅ Категория удалена!")
     
     # Возвращаемся к списку категорий
-    await admin_categories(callback)
+    categories = await globals_module.db.get_categories()
+    
+    keyboard = InlineKeyboardBuilder()
+    keyboard.button(text="➕ Добавить категорию", callback_data="admin_add_category")
+    
+    for cat_id, cat_name, cat_emoji in categories:
+        keyboard.button(
+            text=f"{cat_emoji} {cat_name}",
+            callback_data=f"admin_edit_category_{cat_id}"
+        )
+    
+    keyboard.button(text="🔙 Назад", callback_data="admin_menu")
+    keyboard.adjust(1)
+    
+    await callback.message.edit_text(
+        "📂 <b>Управление категориями</b>\n\n"
+        "Выберите категорию для редактирования или добавьте новую:",
+        reply_markup=keyboard.as_markup(),
+        parse_mode="HTML"
+    )
 
 @router.callback_query(F.data.startswith("admin_edit_spec_"))
 async def admin_edit_spec(callback: CallbackQuery):
@@ -323,11 +341,33 @@ async def admin_delete_spec(callback: CallbackQuery):
     
     await globals_module.db.delete_spec(spec_id)
     
-    await callback.message.edit_text("✅ Характеристика удалена!")
-    await callback.answer()
+    await callback.answer("✅ Характеристика удалена!")
     
     # Возвращаемся к списку характеристик
-    await admin_category_specs(callback)
+    category_id = spec[2]
+    specs = await globals_module.db.get_category_specs(category_id)
+    
+    keyboard = InlineKeyboardBuilder()
+    keyboard.button(text="➕ Добавить характеристику", callback_data=f"admin_add_spec_{category_id}")
+    
+    for spec_id, spec_name in specs:
+        keyboard.button(
+            text=f"⚙️ {spec_name}",
+            callback_data=f"admin_edit_spec_{spec_id}"
+        )
+    
+    keyboard.button(text="🔙 Назад", callback_data=f"admin_edit_category_{category_id}")
+    keyboard.adjust(1)
+    
+    specs_text = "\n".join([f"• {name}" for _, name in specs]) if specs else "Нет характеристик"
+    
+    await callback.message.edit_text(
+        f"⚙️ <b>Характеристики категории</b>\n\n"
+        f"{specs_text}\n\n"
+        f"Выберите характеристику для редактирования или добавьте новую:",
+        reply_markup=keyboard.as_markup(),
+        parse_mode="HTML"
+    )
 
 @router.callback_query(F.data == "admin_shop_addresses")
 async def admin_shop_addresses(callback: CallbackQuery):
@@ -442,11 +482,352 @@ async def admin_delete_shop_address(callback: CallbackQuery):
     address_id = int(callback.data.split("_")[-1])
     await globals_module.db.delete_shop_address(address_id)
     
-    await callback.message.edit_text("✅ Адрес удален!")
-    await callback.answer()
+    await callback.answer("✅ Адрес удален!")
     
     # Возвращаемся к списку адресов
-    await admin_shop_addresses(callback)
+    addresses = await globals_module.db.get_shop_addresses()
+    
+    keyboard = InlineKeyboardBuilder()
+    keyboard.button(text="➕ Добавить адрес", callback_data="admin_add_shop_address")
+    
+    for addr_id, addr_name, addr_text in addresses:
+        keyboard.button(
+            text=f"📍 {addr_name}",
+            callback_data=f"admin_edit_shop_address_{addr_id}"
+        )
+    
+    keyboard.button(text="🔙 Назад", callback_data="admin_menu")
+    keyboard.adjust(1)
+    
+    await callback.message.edit_text(
+        "📍 <b>Управление адресами магазинов</b>\n\n"
+        "Выберите адрес для редактирования или добавьте новый:",
+        reply_markup=keyboard.as_markup(),
+        parse_mode="HTML"
+    )
+
+@router.callback_query(F.data == "admin_specs")
+async def admin_specs(callback: CallbackQuery):
+    """Управление характеристиками (глобальное)"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет прав!", show_alert=True)
+        return
+    
+    # Показываем список категорий для выбора
+    categories = await globals_module.db.get_categories()
+    
+    keyboard = InlineKeyboardBuilder()
+    for cat_id, cat_name, cat_emoji in categories:
+        keyboard.button(
+            text=f"{cat_emoji} {cat_name}",
+            callback_data=f"admin_category_specs_{cat_id}"
+        )
+    
+    keyboard.button(text="🔙 Назад", callback_data="admin_menu")
+    keyboard.adjust(1)
+    
+    await callback.message.edit_text(
+        "⚙️ <b>Управление характеристиками</b>\n\n"
+        "Выберите категорию для управления характеристиками:",
+        reply_markup=keyboard.as_markup(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+@router.callback_query(F.data == "admin_templates")
+async def admin_templates(callback: CallbackQuery):
+    """Управление шаблонами постов"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет прав!", show_alert=True)
+        return
+    
+    # Показываем список категорий для выбора
+    categories = await globals_module.db.get_categories()
+    
+    keyboard = InlineKeyboardBuilder()
+    for cat_id, cat_name, cat_emoji in categories:
+        keyboard.button(
+            text=f"{cat_emoji} {cat_name}",
+            callback_data=f"admin_category_templates_{cat_id}"
+        )
+    
+    keyboard.button(text="🔙 Назад", callback_data="admin_menu")
+    keyboard.adjust(1)
+    
+    await callback.message.edit_text(
+        "📝 <b>Управление шаблонами постов</b>\n\n"
+        "Выберите категорию для управления шаблонами:",
+        reply_markup=keyboard.as_markup(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("admin_category_templates_"))
+async def admin_category_templates(callback: CallbackQuery):
+    """Управление шаблонами для категории"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет прав!", show_alert=True)
+        return
+    
+    category_id = int(callback.data.split("_")[-1])
+    category = await globals_module.db.get_category(category_id)
+    templates = await globals_module.db.get_all_post_templates(category_id)
+    
+    keyboard = InlineKeyboardBuilder()
+    keyboard.button(text="➕ Добавить шаблон", callback_data=f"admin_add_template_{category_id}")
+    
+    for template_id, cat_id, template_name, template_text, is_default in templates:
+        default_mark = "⭐ " if is_default else ""
+        keyboard.button(
+            text=f"{default_mark}📝 {template_name}",
+            callback_data=f"admin_edit_template_{template_id}"
+        )
+    
+    keyboard.button(text="🔙 Назад", callback_data="admin_templates")
+    keyboard.adjust(1)
+    
+    category_name = category[1] if category else "Неизвестная категория"
+    templates_text = "\n".join([f"• {name} {'(⭐ по умолчанию)' if default else ''}" 
+                               for _, _, name, _, default in templates]) if templates else "Нет шаблонов"
+    
+    await callback.message.edit_text(
+        f"📝 <b>Шаблоны постов для категории: {category_name}</b>\n\n"
+        f"{templates_text}\n\n"
+        f"Выберите шаблон для редактирования или добавьте новый:",
+        reply_markup=keyboard.as_markup(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("admin_add_template_"))
+async def admin_add_template(callback: CallbackQuery, state: FSMContext):
+    """Добавление шаблона"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет прав!", show_alert=True)
+        return
+    
+    category_id = int(callback.data.split("_")[-1])
+    await state.update_data(category_id=category_id)
+    
+    await callback.message.edit_text(
+        "➕ <b>Добавление шаблона</b>\n\n"
+        "Введите название шаблона (например: Стандартный шаблон):",
+        parse_mode="HTML"
+    )
+    await state.set_state(AdminPanel.waiting_template_name)
+    await callback.answer()
+
+@router.message(AdminPanel.waiting_template_name)
+async def process_template_name(message: Message, state: FSMContext):
+    """Обработка названия шаблона"""
+    template_name = message.text.strip()
+    await state.update_data(template_name=template_name)
+    
+    await message.answer(
+        "Введите текст шаблона. Используйте переменные:\n"
+        "{product_name} - название товара\n"
+        "{category} - категория\n"
+        "{price} - цена\n"
+        "{product_id} - ID товара\n"
+        "{shop_address} - адрес магазина\n"
+        "{shop_profile_link} - ссылка на профиль магазина\n"
+        "{avito_link} - ссылка на Авито\n"
+        "{specifications} - характеристики (будут вставлены автоматически)\n\n"
+        "Пример:\n"
+        "🔥 <b>{product_name} - {price} ₽</b>\n\n"
+        "{specifications}\n\n"
+        "📍 <b>Адрес:</b> {shop_address}"
+    )
+    await state.set_state(AdminPanel.waiting_template_text)
+
+@router.message(AdminPanel.waiting_template_text)
+async def process_template_text(message: Message, state: FSMContext):
+    """Обработка текста шаблона"""
+    template_text = message.text.strip()
+    data = await state.get_data()
+    category_id = data.get("category_id")
+    template_name = data.get("template_name")
+    
+    # Сохраняем шаблон
+    template_id = await globals_module.db.add_post_template(category_id, template_name, template_text, is_default=0)
+    
+    await message.answer(
+        f"✅ Шаблон добавлен!\n\n"
+        f"📝 {template_name}"
+    )
+    
+    await state.clear()
+    # Возвращаемся к списку шаблонов
+    keyboard = InlineKeyboardBuilder()
+    keyboard.button(text="🔙 К шаблонам", callback_data=f"admin_category_templates_{category_id}")
+    await message.answer("Выберите действие:", reply_markup=keyboard.as_markup())
+
+@router.callback_query(F.data.startswith("admin_edit_template_"))
+async def admin_edit_template(callback: CallbackQuery):
+    """Редактирование шаблона"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет прав!", show_alert=True)
+        return
+    
+    template_id = int(callback.data.split("_")[-1])
+    template = await globals_module.db.get_template(template_id)
+    
+    if not template:
+        await callback.answer("❌ Шаблон не найден!", show_alert=True)
+        return
+    
+    keyboard = InlineKeyboardBuilder()
+    keyboard.button(text="⭐ Установить по умолчанию", callback_data=f"admin_set_default_template_{template_id}")
+    keyboard.button(text="✏️ Изменить текст", callback_data=f"admin_change_template_text_{template_id}")
+    keyboard.button(text="🗑️ Удалить", callback_data=f"admin_delete_template_{template_id}")
+    keyboard.button(text="🔙 Назад", callback_data=f"admin_category_templates_{template[1]}")
+    keyboard.adjust(1)
+    
+    default_mark = "⭐ " if template[4] else ""
+    
+    await callback.message.edit_text(
+        f"📝 <b>Редактирование шаблона</b>\n\n"
+        f"{default_mark}<b>{template[2]}</b>\n\n"
+        f"<code>{template[3][:200]}{'...' if len(template[3]) > 200 else ''}</code>\n\n"
+        f"Выберите действие:",
+        reply_markup=keyboard.as_markup(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("admin_set_default_template_"))
+async def admin_set_default_template(callback: CallbackQuery):
+    """Установка шаблона по умолчанию"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет прав!", show_alert=True)
+        return
+    
+    template_id = int(callback.data.split("_")[-1])
+    await globals_module.db.update_post_template(template_id, is_default=1)
+    
+    await callback.answer("✅ Шаблон установлен по умолчанию!", show_alert=True)
+    
+    # Обновляем экран
+    await admin_edit_template(callback)
+
+@router.callback_query(F.data.startswith("admin_change_template_text_"))
+async def admin_change_template_text(callback: CallbackQuery, state: FSMContext):
+    """Изменение текста шаблона"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет прав!", show_alert=True)
+        return
+    
+    template_id = int(callback.data.split("_")[-1])
+    template = await globals_module.db.get_template(template_id)
+    
+    if not template:
+        await callback.answer("❌ Шаблон не найден!", show_alert=True)
+        return
+    
+    await state.update_data(template_id=template_id)
+    
+    await callback.message.edit_text(
+        f"✏️ <b>Изменение текста шаблона</b>\n\n"
+        f"Текущий текст:\n"
+        f"<code>{template[3]}</code>\n\n"
+        f"Отправьте новый текст шаблона:",
+        parse_mode="HTML"
+    )
+    await state.set_state(AdminPanel.editing_template)
+    await callback.answer()
+
+@router.message(AdminPanel.editing_template)
+async def process_template_edit(message: Message, state: FSMContext):
+    """Обработка редактирования шаблона"""
+    template_text = message.text.strip()
+    data = await state.get_data()
+    template_id = data.get("template_id")
+    
+    await globals_module.db.update_post_template(template_id, template_text=template_text)
+    
+    await message.answer("✅ Текст шаблона обновлен!")
+    
+    await state.clear()
+    
+    # Возвращаемся к редактированию шаблона
+    template = await globals_module.db.get_template(template_id)
+    if template:
+        keyboard = InlineKeyboardBuilder()
+        keyboard.button(text="🔙 К шаблонам", callback_data=f"admin_category_templates_{template[1]}")
+        await message.answer("Выберите действие:", reply_markup=keyboard.as_markup())
+
+@router.callback_query(F.data.startswith("admin_delete_template_"))
+async def admin_delete_template(callback: CallbackQuery):
+    """Удаление шаблона"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет прав!", show_alert=True)
+        return
+    
+    template_id = int(callback.data.split("_")[-1])
+    template = await globals_module.db.get_template(template_id)
+    
+    if not template:
+        await callback.answer("❌ Шаблон не найден!", show_alert=True)
+        return
+    
+    category_id = template[1]
+    
+    keyboard = InlineKeyboardBuilder()
+    keyboard.button(text="✅ Да, удалить", callback_data=f"admin_confirm_delete_template_{template_id}")
+    keyboard.button(text="❌ Отмена", callback_data=f"admin_edit_template_{template_id}")
+    keyboard.adjust(2)
+    
+    await callback.message.edit_text(
+        "⚠️ <b>Подтверждение удаления</b>\n\n"
+        "Вы уверены, что хотите удалить этот шаблон?",
+        reply_markup=keyboard.as_markup(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("admin_confirm_delete_template_"))
+async def admin_confirm_delete_template(callback: CallbackQuery):
+    """Подтверждение удаления шаблона"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет прав!", show_alert=True)
+        return
+    
+    template_id = int(callback.data.split("_")[-1])
+    template = await globals_module.db.get_template(template_id)
+    
+    if template:
+        category_id = template[1]
+        await globals_module.db.delete_post_template(template_id)
+        await callback.answer("✅ Шаблон удален!")
+        
+        # Возвращаемся к списку шаблонов
+        category = await globals_module.db.get_category(category_id)
+        templates = await globals_module.db.get_all_post_templates(category_id)
+        
+        keyboard = InlineKeyboardBuilder()
+        keyboard.button(text="➕ Добавить шаблон", callback_data=f"admin_add_template_{category_id}")
+        
+        for template_id, cat_id, template_name, template_text, is_default in templates:
+            default_mark = "⭐ " if is_default else ""
+            keyboard.button(
+                text=f"{default_mark}📝 {template_name}",
+                callback_data=f"admin_edit_template_{template_id}"
+            )
+        
+        keyboard.button(text="🔙 Назад", callback_data="admin_templates")
+        keyboard.adjust(1)
+        
+        category_name = category[1] if category else "Неизвестная категория"
+        templates_text = "\n".join([f"• {name} {'(⭐ по умолчанию)' if default else ''}" 
+                                   for _, _, name, _, default in templates]) if templates else "Нет шаблонов"
+        
+        await callback.message.edit_text(
+            f"📝 <b>Шаблоны постов для категории: {category_name}</b>\n\n"
+            f"{templates_text}\n\n"
+            f"Выберите шаблон для редактирования или добавьте новый:",
+            reply_markup=keyboard.as_markup(),
+            parse_mode="HTML"
+        )
 
 @router.callback_query(F.data == "admin_stats")
 async def admin_stats(callback: CallbackQuery):

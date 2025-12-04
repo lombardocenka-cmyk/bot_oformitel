@@ -414,3 +414,114 @@ class Database:
             """, (address_id,)) as cursor:
                 return await cursor.fetchone()
 
+    # Методы для работы с шаблонами постов
+    async def add_post_template(self, category_id: int, template_name: str, template_text: str, is_default: int = 0) -> int:
+        """Добавить шаблон поста"""
+        async with aiosqlite.connect(self.db_path) as db:
+            # Если это дефолтный шаблон, снимаем флаг с других шаблонов этой категории
+            if is_default:
+                await db.execute("""
+                    UPDATE post_templates SET is_default = 0 WHERE category_id = ?
+                """, (category_id,))
+            
+            cursor = await db.execute("""
+                INSERT INTO post_templates (category_id, template_name, template_text, is_default, created_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, (category_id, template_name, template_text, is_default, datetime.now().isoformat()))
+            await db.commit()
+            return cursor.lastrowid
+
+    async def get_post_template(self, category_id: int) -> Optional[tuple]:
+        """Получить шаблон поста для категории (дефолтный или первый)"""
+        async with aiosqlite.connect(self.db_path) as db:
+            # Сначала ищем дефолтный
+            async with db.execute("""
+                SELECT template_id, category_id, template_name, template_text, is_default
+                FROM post_templates
+                WHERE category_id = ? AND is_default = 1
+                LIMIT 1
+            """, (category_id,)) as cursor:
+                result = await cursor.fetchone()
+                if result:
+                    return result
+            
+            # Если дефолтного нет, берем первый
+            async with db.execute("""
+                SELECT template_id, category_id, template_name, template_text, is_default
+                FROM post_templates
+                WHERE category_id = ?
+                LIMIT 1
+            """, (category_id,)) as cursor:
+                return await cursor.fetchone()
+
+    async def get_all_post_templates(self, category_id: int = None) -> List[tuple]:
+        """Получить все шаблоны постов (для категории или все)"""
+        async with aiosqlite.connect(self.db_path) as db:
+            if category_id:
+                async with db.execute("""
+                    SELECT template_id, category_id, template_name, template_text, is_default
+                    FROM post_templates
+                    WHERE category_id = ?
+                    ORDER BY is_default DESC, template_id
+                """, (category_id,)) as cursor:
+                    return await cursor.fetchall()
+            else:
+                async with db.execute("""
+                    SELECT template_id, category_id, template_name, template_text, is_default
+                    FROM post_templates
+                    ORDER BY category_id, is_default DESC, template_id
+                """) as cursor:
+                    return await cursor.fetchall()
+
+    async def update_post_template(self, template_id: int, template_name: str = None, template_text: str = None, is_default: int = None):
+        """Обновить шаблон поста"""
+        async with aiosqlite.connect(self.db_path) as db:
+            # Получаем category_id шаблона
+            async with db.execute("SELECT category_id FROM post_templates WHERE template_id = ?", (template_id,)) as cursor:
+                row = await cursor.fetchone()
+                if not row:
+                    return
+                category_id = row[0]
+            
+            # Если устанавливаем дефолтный, снимаем флаг с других
+            if is_default:
+                await db.execute("""
+                    UPDATE post_templates SET is_default = 0 WHERE category_id = ? AND template_id != ?
+                """, (category_id, template_id))
+            
+            # Обновляем поля
+            updates = []
+            params = []
+            if template_name is not None:
+                updates.append("template_name = ?")
+                params.append(template_name)
+            if template_text is not None:
+                updates.append("template_text = ?")
+                params.append(template_text)
+            if is_default is not None:
+                updates.append("is_default = ?")
+                params.append(is_default)
+            
+            if updates:
+                params.append(template_id)
+                await db.execute(f"""
+                    UPDATE post_templates SET {', '.join(updates)} WHERE template_id = ?
+                """, params)
+                await db.commit()
+
+    async def delete_post_template(self, template_id: int):
+        """Удалить шаблон поста"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("DELETE FROM post_templates WHERE template_id = ?", (template_id,))
+            await db.commit()
+
+    async def get_template(self, template_id: int) -> Optional[tuple]:
+        """Получить шаблон по ID"""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT template_id, category_id, template_name, template_text, is_default
+                FROM post_templates
+                WHERE template_id = ?
+            """, (template_id,)) as cursor:
+                return await cursor.fetchone()
+
