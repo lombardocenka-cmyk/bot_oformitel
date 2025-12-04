@@ -386,11 +386,16 @@ async def create_post(request: Request):
                         sent_messages = await globals_module.bot.send_media_group(ADMIN_ID, media)
                         
                         # Добавляем кнопки к первому сообщению
-                        await globals_module.bot.edit_message_reply_markup(
-                            ADMIN_ID,
-                            sent_messages[0].message_id,
-                            reply_markup=post_keyboard.as_markup()
-                        )
+                        try:
+                            await globals_module.bot.edit_message_reply_markup(
+                                chat_id=ADMIN_ID,
+                                message_id=sent_messages[0].message_id,
+                                reply_markup=post_keyboard.as_markup(),
+                                business_connection_id=None  # Явно указываем None, чтобы избежать ошибки валидации
+                            )
+                        except Exception as e:
+                            logger.error(f"Error editing message reply markup: {e}")
+                            # Продолжаем работу даже если не удалось добавить кнопки
                 except Exception as photo_error:
                     # Если не удалось отправить фото, отправляем только текст
                     logger.warning(f"Could not send photos: {photo_error}")

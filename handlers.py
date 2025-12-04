@@ -6,12 +6,15 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from typing import List
 import re
+import logging
 
 from config import CATEGORIES, MAX_PHOTOS
 from database import Database
 from product_search import search_product_specs
 from post_formatter import format_post
 import globals as globals_module
+
+logger = logging.getLogger(__name__)
 
 router = Router()
 
@@ -631,11 +634,16 @@ async def process_avito_link(message: Message, state: FSMContext):
             sent_messages = await globals_module.bot.send_media_group(ADMIN_ID, media)
             
             # Добавляем кнопки к первому сообщению
-            await globals_module.bot.edit_message_reply_markup(
-                ADMIN_ID,
-                sent_messages[0].message_id,
-                reply_markup=post_keyboard.as_markup()
-            )
+            try:
+                await globals_module.bot.edit_message_reply_markup(
+                    chat_id=ADMIN_ID,
+                    message_id=sent_messages[0].message_id,
+                    reply_markup=post_keyboard.as_markup(),
+                    business_connection_id=None  # Явно указываем None, чтобы избежать ошибки валидации
+                )
+            except Exception as e:
+                logger.error(f"Error editing message reply markup: {e}")
+                # Продолжаем работу даже если не удалось добавить кнопки
     else:
         # Только текст
         await globals_module.bot.send_message(
@@ -660,11 +668,17 @@ async def process_avito_link(message: Message, state: FSMContext):
         reply_markup=moderation_keyboard.as_markup()
     )
     
-    await message.answer(
-        "✅ Пост создан и отправлен на модерацию!\n"
-        "Ожидайте одобрения администратора."
-    )
-    
-    # Очищаем состояние сразу после успешной обработки
-    await state.clear()
+    try:
+        await message.answer(
+            "✅ Пост создан и отправлен на модерацию!\n"
+            "Ожидайте одобрения администратора."
+        )
+    except Exception as e:
+        logger.error(f"Error sending confirmation message: {e}")
+    finally:
+        # Очищаем состояние сразу после обработки (даже при ошибках)
+        try:
+            await state.clear()
+        except Exception as e:
+            logger.error(f"Error clearing state: {e}")
 

@@ -5,10 +5,13 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from datetime import datetime
 import re
+import logging
 
 from config import ADMIN_ID, CHANNEL_ID
 from database import Database
 import globals as globals_module
+
+logger = logging.getLogger(__name__)
 
 router = Router()
 
@@ -234,11 +237,16 @@ async def publish_post(post_id: int, post: dict):
             sent_messages = await globals_module.bot.send_media_group(CHANNEL_ID, media)
             
             # Добавляем кнопки к первому сообщению (с текстом)
-            await globals_module.bot.edit_message_reply_markup(
-                CHANNEL_ID,
-                sent_messages[0].message_id,
-                reply_markup=post_keyboard.as_markup()
-            )
+            try:
+                await globals_module.bot.edit_message_reply_markup(
+                    chat_id=CHANNEL_ID,
+                    message_id=sent_messages[0].message_id,
+                    reply_markup=post_keyboard.as_markup(),
+                    business_connection_id=None  # Явно указываем None, чтобы избежать ошибки валидации
+                )
+            except Exception as e:
+                logger.error(f"Error editing message reply markup: {e}")
+                # Продолжаем работу даже если не удалось добавить кнопки
     else:
         # Только текст
         await globals_module.bot.send_message(
