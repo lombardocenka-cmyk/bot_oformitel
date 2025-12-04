@@ -2,6 +2,7 @@
 Веб-сервер для Telegram Mini App
 """
 from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -55,14 +56,32 @@ async def index():
         return f.read()
 
 @app.get("/health")
-@app.get("/ping")
-async def health_check():
-    """Health check endpoint для предотвращения спиндауна"""
+async def health_check_get():
+    """Health check endpoint для предотвращения спиндауна (GET)"""
     return JSONResponse({
         "status": "ok",
         "service": "telegram-miniapp",
         "timestamp": datetime.now().isoformat()
     })
+
+@app.head("/health")
+async def health_check_head():
+    """Health check endpoint для предотвращения спиндауна (HEAD)"""
+    return Response(status_code=200)
+
+@app.get("/ping")
+async def ping_get():
+    """Ping endpoint (GET)"""
+    return JSONResponse({
+        "status": "ok",
+        "service": "telegram-miniapp",
+        "timestamp": datetime.now().isoformat()
+    })
+
+@app.head("/ping")
+async def ping_head():
+    """Ping endpoint (HEAD)"""
+    return Response(status_code=200)
 
 @app.post("/api/search-specs")
 async def search_specs(request: Request):
