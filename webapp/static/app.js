@@ -14,6 +14,7 @@ let state = {
     productName: null,
     specifications: {},
     photos: [],
+    condition: null,
     price: null,
     productId: null,
     shopAddress: null,
@@ -27,13 +28,14 @@ const steps = {
     name: document.getElementById('step-name'),
     specs: document.getElementById('step-specs'),
     photos: document.getElementById('step-photos'),
+    condition: document.getElementById('step-condition'),
     additional: document.getElementById('step-additional'),
     preview: document.getElementById('step-preview'),
     success: document.getElementById('step-success')
 };
 
 // Маппинг шагов для индикатора
-const stepOrder = ['category', 'name', 'specs', 'photos', 'additional', 'preview'];
+const stepOrder = ['category', 'name', 'specs', 'photos', 'condition', 'additional', 'preview'];
 
 // Переход к шагу
 function showStep(stepName) {
@@ -199,7 +201,17 @@ document.getElementById('photos-done-btn').addEventListener('click', () => {
         tg.showAlert('Добавьте хотя бы одну фотографию');
         return;
     }
-    showStep('link');
+    showStep('condition');
+});
+
+// Шаг 5: Выбор состояния товара
+document.querySelectorAll('.condition-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        state.condition = btn.dataset.condition;
+        // Сохраняем состояние в характеристики
+        state.specifications['Состояние'] = state.condition;
+        showStep('additional');
+    });
 });
 
 // Загрузка адресов магазинов
