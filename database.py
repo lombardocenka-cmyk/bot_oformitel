@@ -113,6 +113,9 @@ class Database:
             
             # Инициализация дефолтных адресов магазинов, если их нет
             await self._init_default_shop_addresses()
+            
+            # Инициализация дефолтных шагов, если их нет
+            await self._init_default_post_steps()
 
     async def add_user(self, user_id: int, username: str = None, full_name: str = None):
         """Добавить пользователя"""
