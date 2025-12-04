@@ -76,6 +76,12 @@ def get_start_keyboard() -> InlineKeyboardMarkup:
     builder.adjust(1)
     return builder.as_markup()
 
+def get_cancel_keyboard() -> InlineKeyboardMarkup:
+    """Создать клавиатуру с кнопкой отмены"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text="❌ Отмена", callback_data="cancel_post")
+    return builder.as_markup()
+
 @router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext):
     """Обработчик команды /start"""
@@ -85,12 +91,39 @@ async def cmd_start(message: Message, state: FSMContext):
     
     await globals_module.db.add_user(user_id, username, full_name)
     
+    # Очищаем состояние, если оно было активно
+    await state.clear()
+    
     await message.answer(
         f"👋 Привет, {full_name}!\n\n"
         "Я помогу вам создать пост для канала.\n\n"
         "Выберите способ создания поста:",
         reply_markup=get_start_keyboard()
     )
+
+@router.message(Command("cancel"))
+async def cmd_cancel(message: Message, state: FSMContext):
+    """Обработчик команды /cancel для отмены создания поста"""
+    current_state = await state.get_state()
+    if current_state is None:
+        await message.answer("❌ Нет активной операции для отмены.")
+        return
+    
+    await state.clear()
+    await message.answer(
+        "❌ Создание поста отменено.\n\n"
+        "Используйте /start для начала новой операции."
+    )
+
+@router.callback_query(F.data == "cancel_post")
+async def cancel_post_callback(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки отмены"""
+    await state.clear()
+    await callback.message.edit_text(
+        "❌ Создание поста отменено.\n\n"
+        "Используйте /start для начала новой операции."
+    )
+    await callback.answer("Операция отменена")
 
 @router.callback_query(F.data == "use_bot")
 async def use_bot_handler(callback: CallbackQuery, state: FSMContext):
@@ -118,6 +151,11 @@ async def process_category(callback: CallbackQuery, state: FSMContext):
 @router.message(StateFilter(PostCreation.waiting_product_name))
 async def process_product_name(message: Message, state: FSMContext):
     """Обработка названия товара и поиск характеристик"""
+    # Проверка на команду отмены
+    if message.text and message.text.strip().lower() in ["/cancel", "отмена", "cancel"]:
+        await cmd_cancel(message, state)
+        return
+    
     product_name = message.text
     data = await state.get_data()
     category = data.get("category")
@@ -218,6 +256,11 @@ async def process_edit_spec(callback: CallbackQuery, state: FSMContext):
 @router.message(StateFilter(PostCreation.editing_spec))
 async def process_spec_value(message: Message, state: FSMContext):
     """Обработка нового значения характеристики"""
+    # Проверка на команду отмены
+    if message.text and message.text.strip().lower() in ["/cancel", "отмена", "cancel"]:
+        await cmd_cancel(message, state)
+        return
+    
     data = await state.get_data()
     spec_name = data.get("editing_spec_name")
     specs = data.get("specifications", {})
@@ -383,12 +426,29 @@ async def process_shop_profile_link(message: Message, state: FSMContext):
 @router.message(StateFilter(PostCreation.waiting_avito_link))
 async def process_avito_link(message: Message, state: FSMContext):
     """Обработка ссылки на Авито"""
+    # Проверка на команду отмены
+    if message.text and message.text.strip().lower() in ["/cancel", "отмена", "cancel"]:
+        await cmd_cancel(message, state)
+        return
+    
     avito_link = message.text
     
     # Простая проверка на ссылку
     if not (avito_link.startswith("http://") or avito_link.startswith("https://")):
-        await message.answer("⚠️ Пожалуйста, отправьте корректную ссылку!")
+        await message.answer(
+            "⚠️ Пожалуйста, отправьте корректную ссылку!",
+            reply_markup=get_cancel_keyboard()
+        )
         return
+    
+    # Проверяем, не обработали ли мы уже эту ссылку
+    data = await state.get_data()
+    if data.get("avito_link_processed"):
+        await message.answer("✅ Ссылка на Авито уже была обработана. Пост создан и отправлен на модерацию.")
+        return
+    
+    # Помечаем, что ссылка обработана
+    await state.update_data(avito_link_processed=True)
     
     data = await state.get_data()
     
@@ -511,5 +571,6 @@ async def process_avito_link(message: Message, state: FSMContext):
         "Ожидайте одобрения администратора."
     )
     
+    # Очищаем состояние сразу после успешной обработки
     await state.clear()
 
