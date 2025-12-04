@@ -320,6 +320,11 @@ async def photos_done(message: Message, state: FSMContext):
 @router.message(StateFilter(PostCreation.waiting_price))
 async def process_price(message: Message, state: FSMContext):
     """Обработка цены"""
+    # Проверка на команду отмены
+    if message.text and message.text.strip().lower() in ["/cancel", "отмена", "cancel"]:
+        await cmd_cancel(message, state)
+        return
+    
     if message.text and (message.text.strip().lower() == "/skip" or message.text.strip().lower() == "skip"):
         price = None
     else:
@@ -328,18 +333,24 @@ async def process_price(message: Message, state: FSMContext):
             # Проверяем, что это число
             float(price.replace(" ", "").replace(",", "."))
         except:
-            await message.answer("⚠️ Пожалуйста, введите корректную цену (число) или /skip")
+            await message.answer("⚠️ Пожалуйста, введите корректную цену (число) или /skip", reply_markup=get_cancel_keyboard())
             return
     
     await state.update_data(price=price)
     await message.answer(
-        "🔢 Введите ID товара (артикул) или отправьте /skip чтобы пропустить:"
+        "🔢 Введите ID товара (артикул) или отправьте /skip чтобы пропустить:",
+        reply_markup=get_cancel_keyboard()
     )
     await state.set_state(PostCreation.waiting_product_id)
 
 @router.message(StateFilter(PostCreation.waiting_product_id))
 async def process_product_id(message: Message, state: FSMContext):
     """Обработка ID товара"""
+    # Проверка на команду отмены
+    if message.text and message.text.strip().lower() in ["/cancel", "отмена", "cancel"]:
+        await cmd_cancel(message, state)
+        return
+    
     if message.text and (message.text.strip().lower() == "/skip" or message.text.strip().lower() == "skip"):
         product_id = None
     else:
@@ -358,6 +369,7 @@ async def process_product_id(message: Message, state: FSMContext):
                 callback_data=f"shop_address_{addr_id}"
             )
         keyboard.button(text="✏️ Ввести свой адрес", callback_data="shop_address_custom")
+        keyboard.button(text="❌ Отмена", callback_data="cancel_post")
         keyboard.adjust(1)
         
         addresses_text = "\n".join([f"• {name}: {text}" for _, name, text in addresses])
@@ -368,7 +380,8 @@ async def process_product_id(message: Message, state: FSMContext):
         )
     else:
         await message.answer(
-            "📍 Введите адрес магазина:"
+            "📍 Введите адрес магазина:",
+            reply_markup=get_cancel_keyboard()
         )
     
     await state.set_state(PostCreation.waiting_shop_address)
@@ -396,17 +409,28 @@ async def process_shop_address_callback(callback: CallbackQuery, state: FSMConte
 @router.message(StateFilter(PostCreation.waiting_shop_address))
 async def process_shop_address(message: Message, state: FSMContext):
     """Обработка ввода адреса магазина"""
+    # Проверка на команду отмены
+    if message.text and message.text.strip().lower() in ["/cancel", "отмена", "cancel"]:
+        await cmd_cancel(message, state)
+        return
+    
     shop_address = message.text.strip()
     await state.update_data(shop_address=shop_address)
     
     await message.answer(
-        "💬 Введите ссылку на профиль для покупки (например: @username или https://t.me/username) или /skip:"
+        "💬 Введите ссылку на профиль для покупки (например: @username или https://t.me/username) или /skip:",
+        reply_markup=get_cancel_keyboard()
     )
     await state.set_state(PostCreation.waiting_shop_profile_link)
 
 @router.message(StateFilter(PostCreation.waiting_shop_profile_link))
 async def process_shop_profile_link(message: Message, state: FSMContext):
     """Обработка ссылки на профиль"""
+    # Проверка на команду отмены
+    if message.text and message.text.strip().lower() in ["/cancel", "отмена", "cancel"]:
+        await cmd_cancel(message, state)
+        return
+    
     if message.text and (message.text.strip().lower() == "/skip" or message.text.strip().lower() == "skip"):
         shop_profile_link = None
     else:
@@ -419,7 +443,8 @@ async def process_shop_profile_link(message: Message, state: FSMContext):
     
     await state.update_data(shop_profile_link=shop_profile_link)
     await message.answer(
-        "🛒 Теперь отправьте ссылку на объявление Авито:"
+        "🛒 Теперь отправьте ссылку на объявление Авито:",
+        reply_markup=get_cancel_keyboard()
     )
     await state.set_state(PostCreation.waiting_avito_link)
 
