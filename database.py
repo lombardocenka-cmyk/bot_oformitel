@@ -93,6 +93,19 @@ class Database:
                 )
             """)
             
+            # Таблица шагов процесса создания поста
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS post_steps (
+                    step_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    step_order INTEGER NOT NULL,
+                    step_name TEXT NOT NULL,
+                    step_type TEXT NOT NULL,
+                    step_config TEXT,
+                    is_active INTEGER DEFAULT 1,
+                    created_at TEXT
+                )
+            """)
+            
             await db.commit()
             
             # Инициализация дефолтных категорий, если их нет
@@ -536,4 +549,96 @@ class Database:
                 WHERE template_id = ?
             """, (template_id,)) as cursor:
                 return await cursor.fetchone()
+
+    # Методы для работы с шагами процесса создания поста
+    async def add_post_step(self, step_order: int, step_name: str, step_type: str, step_config: str = "{}", is_active: int = 1) -> int:
+        """Добавить шаг процесса создания поста"""
+        async with aiosqlite.connect(self.db_path) as db:
+            # Обновляем порядок существующих шагов
+            await db.execute("""
+                UPDATE post_steps SET step_order = step_order + 1 
+                WHERE step_order >= ? AND is_active = 1
+            """, (step_order,))
+            
+            cursor = await db.execute("""
+                INSERT INTO post_steps (step_order, step_name, step_type, step_config, is_active, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (step_order, step_name, step_type, step_config, is_active, datetime.now().isoformat()))
+            await db.commit()
+            return cursor.lastrowid
+
+    async def get_post_steps(self, active_only: bool = True) -> List[tuple]:
+        """Получить все шаги процесса создания поста"""
+        async with aiosqlite.connect(self.db_path) as db:
+            if active_only:
+                async with db.execute("""
+                    SELECT step_id, step_order, step_name, step_type, step_config, is_active
+                    FROM post_steps
+                    WHERE is_active = 1
+                    ORDER BY step_order
+                """) as cursor:
+                    return await cursor.fetchall()
+            else:
+                async with db.execute("""
+                    SELECT step_id, step_order, step_name, step_type, step_config, is_active
+                    FROM post_steps
+                    ORDER BY step_order
+                """) as cursor:
+                    return await cursor.fetchall()
+
+    async def get_post_step(self, step_id: int) -> Optional[tuple]:
+        """Получить шаг по ID"""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT step_id, step_order, step_name, step_type, step_config, is_active
+                FROM post_steps
+                WHERE step_id = ?
+            """, (step_id,)) as cursor:
+                return await cursor.fetchone()
+
+    async def update_post_step(self, step_id: int, step_order: int = None, step_name: str = None, 
+                              step_type: str = None, step_config: str = None, is_active: int = None):
+        """Обновить шаг процесса создания поста"""
+        async with aiosqlite.connect(self.db_path) as db:
+            updates = []
+            params = []
+            
+            if step_order is not None:
+                updates.append("step_order = ?")
+                params.append(step_order)
+            if step_name is not None:
+                updates.append("step_name = ?")
+                params.append(step_name)
+            if step_type is not None:
+                updates.append("step_type = ?")
+                params.append(step_type)
+            if step_config is not None:
+                updates.append("step_config = ?")
+                params.append(step_config)
+            if is_active is not None:
+                updates.append("is_active = ?")
+                params.append(is_active)
+            
+            if updates:
+                params.append(step_id)
+                await db.execute(f"""
+                    UPDATE post_steps SET {', '.join(updates)} WHERE step_id = ?
+                """, params)
+                await db.commit()
+
+    async def delete_post_step(self, step_id: int):
+        """Удалить шаг процесса создания поста"""
+        async with aiosqlite.connect(self.db_path) as db:
+            # Получаем порядок удаляемого шага
+            step = await self.get_post_step(step_id)
+            if step:
+                step_order = step[1]
+                # Удаляем шаг
+                await db.execute("DELETE FROM post_steps WHERE step_id = ?", (step_id,))
+                # Обновляем порядок остальных шагов
+                await db.execute("""
+                    UPDATE post_steps SET step_order = step_order - 1 
+                    WHERE step_order > ? AND is_active = 1
+                """, (step_order,))
+                await db.commit()
 

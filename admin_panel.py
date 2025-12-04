@@ -31,6 +31,8 @@ class AdminPanel(StatesGroup):
     waiting_template_name = State()
     waiting_template_text = State()
     editing_template = State()
+    waiting_step_name = State()
+    waiting_step_config = State()
 
 @router.message(Command("admin"))
 async def cmd_admin(message: Message):
@@ -48,6 +50,7 @@ async def show_admin_menu(message: Message):
     keyboard.button(text="⚙️ Управление характеристиками", callback_data="admin_specs")
     keyboard.button(text="📍 Управление адресами магазинов", callback_data="admin_shop_addresses")
     keyboard.button(text="📝 Управление шаблонами постов", callback_data="admin_templates")
+    keyboard.button(text="🔨 Конструктор шагов", callback_data="admin_steps_builder")
     keyboard.button(text="📊 Статистика", callback_data="admin_stats")
     keyboard.adjust(1)
     

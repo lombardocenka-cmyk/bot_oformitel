@@ -28,6 +28,7 @@ class PostCreation(StatesGroup):
     waiting_specs_confirmation = State()
     editing_spec = State()
     waiting_photos = State()
+    waiting_condition = State()
     waiting_price = State()
     waiting_product_id = State()
     waiting_shop_address = State()
@@ -311,11 +312,74 @@ async def photos_done(message: Message, state: FSMContext):
         await message.answer("⚠️ Пожалуйста, отправьте хотя бы одну фотографию!")
         return
     
+    # Переходим к выбору состояния товара
+    condition_keyboard = InlineKeyboardBuilder()
+    condition_keyboard.button(text="✨ Отличное", callback_data="condition_excellent")
+    condition_keyboard.button(text="👍 Хорошее", callback_data="condition_good")
+    condition_keyboard.button(text="⚖️ Удовлетворительное", callback_data="condition_fair")
+    condition_keyboard.button(text="⚠️ Плохое", callback_data="condition_poor")
+    condition_keyboard.button(text="❌ Отмена", callback_data="cancel_post")
+    condition_keyboard.adjust(2)
+    
     await message.answer(
         f"✅ Фотографии загружены ({len(photos)} шт.)\n\n"
-        "💰 Теперь введите цену товара в рублях (или отправьте /skip чтобы пропустить):"
+        "📱 Выберите состояние товара:",
+        reply_markup=condition_keyboard.as_markup()
     )
+    await state.set_state(PostCreation.waiting_condition)
+
+@router.callback_query(F.data.startswith("condition_"), StateFilter(PostCreation.waiting_condition))
+async def process_condition(callback: CallbackQuery, state: FSMContext):
+    """Обработка выбора состояния товара"""
+    if callback.data == "cancel_post":
+        await cancel_post_callback(callback, state)
+        return
+    
+    condition_map = {
+        "condition_excellent": "Отличное",
+        "condition_good": "Хорошее",
+        "condition_fair": "Удовлетворительное",
+        "condition_poor": "Плохое"
+    }
+    
+    condition = condition_map.get(callback.data, "Не указано")
+    
+    # Сохраняем состояние в характеристики
+    data = await state.get_data()
+    specs = data.get("specifications", {})
+    specs["Состояние"] = condition
+    await state.update_data(specifications=specs)
+    
+    await callback.message.edit_text(
+        f"✅ Состояние выбрано: <b>{condition}</b>\n\n"
+        "💰 Теперь введите цену товара в рублях (или отправьте /skip чтобы пропустить):",
+        parse_mode="HTML",
+        reply_markup=get_cancel_keyboard()
+    )
+    await callback.answer()
     await state.set_state(PostCreation.waiting_price)
+
+@router.message(StateFilter(PostCreation.waiting_condition))
+async def process_condition_text(message: Message, state: FSMContext):
+    """Обработка текстового ввода состояния (если пользователь не использовал кнопки)"""
+    # Проверка на команду отмены
+    if message.text and message.text.strip().lower() in ["/cancel", "отмена", "cancel"]:
+        await cmd_cancel(message, state)
+        return
+    
+    # Показываем кнопки снова
+    condition_keyboard = InlineKeyboardBuilder()
+    condition_keyboard.button(text="✨ Отличное", callback_data="condition_excellent")
+    condition_keyboard.button(text="👍 Хорошее", callback_data="condition_good")
+    condition_keyboard.button(text="⚖️ Удовлетворительное", callback_data="condition_fair")
+    condition_keyboard.button(text="⚠️ Плохое", callback_data="condition_poor")
+    condition_keyboard.button(text="❌ Отмена", callback_data="cancel_post")
+    condition_keyboard.adjust(2)
+    
+    await message.answer(
+        "⚠️ Пожалуйста, выберите состояние товара из предложенных вариантов:",
+        reply_markup=condition_keyboard.as_markup()
+    )
 
 @router.message(StateFilter(PostCreation.waiting_price))
 async def process_price(message: Message, state: FSMContext):
