@@ -50,7 +50,30 @@ class Database:
                 )
             """)
             
+            # Таблица категорий (для админ-панели)
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS categories (
+                    category_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    category_name TEXT NOT NULL,
+                    category_emoji TEXT,
+                    created_at TEXT
+                )
+            """)
+            
+            # Таблица характеристик категорий
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS category_specs (
+                    spec_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    category_id INTEGER,
+                    spec_name TEXT NOT NULL,
+                    FOREIGN KEY (category_id) REFERENCES categories (category_id)
+                )
+            """)
+            
             await db.commit()
+            
+            # Инициализация дефолтных категорий, если их нет
+            await self._init_default_categories()
 
     async def add_user(self, user_id: int, username: str = None, full_name: str = None):
         """Добавить пользователя"""
@@ -178,4 +201,132 @@ class Database:
                     "created_at": row[10]
                 } for row in rows]
 
+    async def _init_default_categories(self):
+        """Инициализация дефолтных категорий"""
+        async with aiosqlite.connect(self.db_path) as db:
+            # Проверяем, есть ли категории
+            async with db.execute("SELECT COUNT(*) FROM categories") as cursor:
+                count = (await cursor.fetchone())[0]
+            
+            if count == 0:
+                # Добавляем дефолтные категории
+                default_categories = [
+                    ("Смартфон (Android)", "📱"),
+                    ("Смартфон (Apple)", "🍎"),
+                    ("Ноутбук", "💻"),
+                    ("ПК", "🖥️"),
+                    ("Другая техника", "🔧")
+                ]
+                
+                for name, emoji in default_categories:
+                    await db.execute("""
+                        INSERT INTO categories (category_name, category_emoji, created_at)
+                        VALUES (?, ?, ?)
+                    """, (name, emoji, datetime.now().isoformat()))
+                
+                await db.commit()
+
+    async def get_categories(self) -> List[tuple]:
+        """Получить все категории"""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT category_id, category_name, category_emoji
+                FROM categories
+                ORDER BY category_id
+            """) as cursor:
+                return await cursor.fetchall()
+
+    async def get_category(self, category_id: int) -> Optional[tuple]:
+        """Получить категорию по ID"""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT category_id, category_name, category_emoji
+                FROM categories
+                WHERE category_id = ?
+            """, (category_id,)) as cursor:
+                return await cursor.fetchone()
+
+    async def add_category(self, name: str, emoji: str) -> int:
+        """Добавить категорию"""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("""
+                INSERT INTO categories (category_name, category_emoji, created_at)
+                VALUES (?, ?, ?)
+            """, (name, emoji, datetime.now().isoformat()))
+            await db.commit()
+            return cursor.lastrowid
+
+    async def delete_category(self, category_id: int):
+        """Удалить категорию"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("DELETE FROM categories WHERE category_id = ?", (category_id,))
+            await db.commit()
+
+    async def get_category_specs(self, category_id: int) -> List[tuple]:
+        """Получить характеристики категории"""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT spec_id, spec_name
+                FROM category_specs
+                WHERE category_id = ?
+                ORDER BY spec_id
+            """, (category_id,)) as cursor:
+                return await cursor.fetchall()
+
+    async def add_category_spec(self, category_id: int, spec_name: str) -> int:
+        """Добавить характеристику категории"""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("""
+                INSERT INTO category_specs (category_id, spec_name)
+                VALUES (?, ?)
+            """, (category_id, spec_name))
+            await db.commit()
+            return cursor.lastrowid
+
+    async def get_spec(self, spec_id: int) -> Optional[tuple]:
+        """Получить характеристику по ID"""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT spec_id, spec_name, category_id
+                FROM category_specs
+                WHERE spec_id = ?
+            """, (spec_id,)) as cursor:
+                return await cursor.fetchone()
+
+    async def delete_spec(self, spec_id: int):
+        """Удалить характеристику"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("DELETE FROM category_specs WHERE spec_id = ?", (spec_id,))
+            await db.commit()
+
+    async def get_stats(self) -> Dict:
+        """Получить статистику"""
+        async with aiosqlite.connect(self.db_path) as db:
+            stats = {}
+            
+            # Количество пользователей
+            async with db.execute("SELECT COUNT(*) FROM users") as cursor:
+                stats['users'] = (await cursor.fetchone())[0]
+            
+            # Количество постов
+            async with db.execute("SELECT COUNT(*) FROM posts") as cursor:
+                stats['posts'] = (await cursor.fetchone())[0]
+            
+            # Посты на модерации
+            async with db.execute("SELECT COUNT(*) FROM posts WHERE status = 'pending'") as cursor:
+                stats['pending'] = (await cursor.fetchone())[0]
+            
+            # Одобренные посты
+            async with db.execute("SELECT COUNT(*) FROM posts WHERE status = 'approved'") as cursor:
+                stats['approved'] = (await cursor.fetchone())[0]
+            
+            # Опубликованные посты
+            async with db.execute("SELECT COUNT(*) FROM posts WHERE status = 'published'") as cursor:
+                stats['published'] = (await cursor.fetchone())[0]
+            
+            # Отклоненные посты
+            async with db.execute("SELECT COUNT(*) FROM posts WHERE status = 'rejected'") as cursor:
+                stats['rejected'] = (await cursor.fetchone())[0]
+            
+            return stats
 

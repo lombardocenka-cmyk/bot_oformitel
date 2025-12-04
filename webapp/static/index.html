@@ -11,6 +11,17 @@
     <div class="container">
         <div class="header">
             <h1>📝 Создание поста</h1>
+            <p class="subtitle">Заполните все поля для создания привлекательного объявления</p>
+        </div>
+        
+        <!-- Индикатор прогресса -->
+        <div class="step-indicator" id="step-indicator">
+            <div class="step-dot active" data-step="1">1</div>
+            <div class="step-dot" data-step="2">2</div>
+            <div class="step-dot" data-step="3">3</div>
+            <div class="step-dot" data-step="4">4</div>
+            <div class="step-dot" data-step="5">5</div>
+            <div class="step-dot" data-step="6">6</div>
         </div>
 
         <!-- Шаг 1: Выбор категории -->
@@ -65,13 +76,27 @@
         <div id="step-link" class="step">
             <h2>Ссылка на объявление Авито</h2>
             <input type="url" id="avito-link" placeholder="https://www.avito.ru/..." class="input-field">
+            <button id="preview-btn" class="btn-primary">👁️ Предпросмотр поста</button>
+        </div>
+
+        <!-- Шаг 6: Предпросмотр поста -->
+        <div id="step-preview" class="step">
+            <h2>Предпросмотр поста</h2>
+            <div id="preview-container" class="preview-container">
+                <div class="preview-header">
+                    <h3>📝 Ваш пост</h3>
+                </div>
+                <div id="preview-content" class="preview-content"></div>
+            </div>
+            <button id="edit-preview-btn" class="btn-secondary">✏️ Редактировать</button>
             <button id="submit-btn" class="btn-primary">📤 Отправить на модерацию</button>
         </div>
 
-        <!-- Шаг 6: Успех -->
+        <!-- Шаг 7: Успех -->
         <div id="step-success" class="step">
             <div class="success-message">
-                <h2>✅ Пост создан!</h2>
+                <div class="success-icon">✅</div>
+                <h2>Пост создан!</h2>
                 <p>Ваш пост отправлен на модерацию администратору.</p>
                 <p>Ожидайте одобрения.</p>
             </div>

@@ -19,13 +19,35 @@ const steps = {
     specs: document.getElementById('step-specs'),
     photos: document.getElementById('step-photos'),
     link: document.getElementById('step-link'),
+    preview: document.getElementById('step-preview'),
     success: document.getElementById('step-success')
 };
+
+// Маппинг шагов для индикатора
+const stepOrder = ['category', 'name', 'specs', 'photos', 'link', 'preview'];
 
 // Переход к шагу
 function showStep(stepName) {
     Object.values(steps).forEach(step => step.classList.remove('active'));
-    steps[stepName].classList.add('active');
+    if (steps[stepName]) {
+        steps[stepName].classList.add('active');
+    }
+    updateStepIndicator(stepName);
+}
+
+// Обновление индикатора прогресса
+function updateStepIndicator(currentStep) {
+    const dots = document.querySelectorAll('.step-dot');
+    const currentIndex = stepOrder.indexOf(currentStep);
+    
+    dots.forEach((dot, index) => {
+        dot.classList.remove('active', 'completed');
+        if (index < currentIndex) {
+            dot.classList.add('completed');
+        } else if (index === currentIndex) {
+            dot.classList.add('active');
+        }
+    });
 }
 
 // Шаг 1: Выбор категории
@@ -162,8 +184,8 @@ document.getElementById('photos-done-btn').addEventListener('click', () => {
     showStep('link');
 });
 
-// Шаг 5: Ссылка на Авито
-document.getElementById('submit-btn').addEventListener('click', async () => {
+// Шаг 5: Ссылка на Авито - Предпросмотр
+document.getElementById('preview-btn').addEventListener('click', async () => {
     const avitoLink = document.getElementById('avito-link').value.trim();
     if (!avitoLink || !avitoLink.startsWith('http')) {
         tg.showAlert('Введите корректную ссылку на Авито');
@@ -172,6 +194,71 @@ document.getElementById('submit-btn').addEventListener('click', async () => {
     
     state.avitoLink = avitoLink;
     
+    // Получаем предпросмотр поста
+    try {
+        const response = await fetch('/api/preview-post', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ...state,
+                init_data: tg.initData
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            renderPreview(data.preview);
+            showStep('preview');
+        } else {
+            tg.showAlert(data.error || 'Ошибка при создании предпросмотра');
+        }
+    } catch (error) {
+        tg.showAlert('Ошибка соединения с сервером');
+        console.error(error);
+    }
+});
+
+// Рендеринг предпросмотра
+function renderPreview(previewText) {
+    const container = document.getElementById('preview-content');
+    
+    // Парсим HTML из текста поста (если есть HTML теги)
+    const lines = previewText.split('\n');
+    let html = '';
+    
+    lines.forEach(line => {
+        if (line.trim()) {
+            // Обработка заголовков
+            if (line.includes('<b>') && line.includes('</b>')) {
+                html += `<div style="font-size: 18px; font-weight: 700; margin: 12px 0; color: var(--tg-theme-text-color);">${line}</div>`;
+            }
+            // Обработка характеристик
+            else if (line.startsWith('•')) {
+                html += `<div class="preview-spec-item"><span class="preview-spec-name">${line.replace('•', '').split(':')[0]}:</span><span class="preview-spec-value">${line.split(':').slice(1).join(':').trim()}</span></div>`;
+            }
+            // Обработка ссылок
+            else if (line.startsWith('http')) {
+                html += `<a href="${line}" target="_blank" class="preview-link">🛒 Купить на Авито</a>`;
+            }
+            // Обычный текст
+            else {
+                html += `<div style="margin: 8px 0; color: var(--tg-theme-text-color);">${line}</div>`;
+            }
+        } else {
+            html += '<div style="height: 8px;"></div>';
+        }
+    });
+    
+    container.innerHTML = html;
+}
+
+// Редактирование из предпросмотра
+document.getElementById('edit-preview-btn').addEventListener('click', () => {
+    showStep('link');
+});
+
+// Шаг 6: Отправка поста
+document.getElementById('submit-btn').addEventListener('click', async () => {
     tg.showPopup({
         title: 'Отправка поста',
         message: 'Отправляем пост на модерацию...',

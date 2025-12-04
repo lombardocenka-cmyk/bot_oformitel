@@ -101,6 +101,62 @@ async def search_specs(request: Request):
             content={"success": False, "error": str(e)}
         )
 
+@app.post("/api/preview-post")
+async def preview_post(request: Request):
+    """Предпросмотр поста перед отправкой"""
+    try:
+        data = await request.json()
+        init_data = data.get("init_data")
+        
+        # Валидация initData
+        try:
+            web_app_data = safe_parse_webapp_init_data(BOT_TOKEN, init_data)
+        except ValueError as e:
+            logger.error(f"Invalid init data: {e}")
+            return JSONResponse(
+                status_code=401,
+                content={"success": False, "error": "Неверные данные авторизации"}
+            )
+        
+        # Получаем данные поста
+        category = data.get("category")
+        product_name = data.get("productName")
+        specifications = data.get("specifications", {})
+        avito_link = data.get("avitoLink")
+        
+        if not all([category, product_name, avito_link]):
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "Не все поля заполнены"}
+            )
+        
+        # Импортируем функцию форматирования
+        try:
+            from post_formatter import format_post
+        except ImportError:
+            sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            from post_formatter import format_post
+        
+        # Формируем предпросмотр поста
+        preview_text = format_post(
+            product_name,
+            category,
+            specifications,
+            avito_link
+        )
+        
+        return JSONResponse({
+            "success": True,
+            "preview": preview_text
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in preview_post: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
 @app.post("/api/create-post")
 async def create_post(request: Request):
     """Создание поста через Mini App"""
@@ -168,7 +224,7 @@ async def create_post(request: Request):
         from aiogram.utils.keyboard import InlineKeyboardBuilder
         
         buy_keyboard = InlineKeyboardBuilder()
-        buy_keyboard.button(text="🛒 Купить", url=avito_link)
+        buy_keyboard.button(text="🛒 Купить на Авито", url=avito_link)
         
         moderation_keyboard = InlineKeyboardBuilder()
         moderation_keyboard.button(text="✅ Одобрить", callback_data=f"approve_{post_id}")

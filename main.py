@@ -9,6 +9,7 @@ from config import BOT_TOKEN, DATABASE_PATH
 from database import Database
 from handlers import router as handlers_router
 from moderation import router as moderation_router
+from admin_panel import router as admin_panel_router
 from scheduler import PostScheduler
 from globals import init_globals
 
@@ -30,6 +31,7 @@ dp = Dispatcher(storage=storage)
 # Регистрация роутеров
 dp.include_router(handlers_router)
 dp.include_router(moderation_router)
+dp.include_router(admin_panel_router)
 
 # Инициализация базы данных
 db = Database(DATABASE_PATH)

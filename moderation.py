@@ -135,9 +135,9 @@ async def publish_post(post_id: int, post: dict):
     """Публикация поста в канал"""
     from config import CHANNEL_ID
     
-    # Создаем кнопку "Купить"
+    # Создаем кнопку "Купить на Авито" автоматически из ссылки
     buy_keyboard = InlineKeyboardBuilder()
-    buy_keyboard.button(text="🛒 Купить", url=post["avito_link"])
+    buy_keyboard.button(text="🛒 Купить на Авито", url=post["avito_link"])
     
     # Отправляем фотографии
     photos = post["photos"]
