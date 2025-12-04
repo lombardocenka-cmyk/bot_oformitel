@@ -164,16 +164,28 @@ class Database:
             """, (post_id,)) as cursor:
                 row = await cursor.fetchone()
                 if row:
+                    # Обрабатываем specifications
+                    try:
+                        specs = json.loads(row[4]) if row[4] else {}
+                    except (json.JSONDecodeError, TypeError):
+                        specs = {}
+                    
+                    # Обрабатываем photos
+                    try:
+                        photos = json.loads(row[5]) if row[5] else []
+                    except (json.JSONDecodeError, TypeError):
+                        photos = []
+                    
                     return {
                         "post_id": row[0],
                         "user_id": row[1],
                         "category": row[2],
                         "product_name": row[3],
-                        "specifications": json.loads(row[4]),
-                        "photos": json.loads(row[5]),
-                        "avito_link": row[6],
-                        "post_text": row[7],
-                        "status": row[8],
+                        "specifications": specs,
+                        "photos": photos,
+                        "avito_link": row[6] or "",
+                        "post_text": row[7] or "",
+                        "status": row[8] or "pending",
                         "scheduled_time": row[9],
                         "created_at": row[10]
                     }
