@@ -28,6 +28,10 @@ class PostCreation(StatesGroup):
     waiting_specs_confirmation = State()
     editing_spec = State()
     waiting_photos = State()
+    waiting_price = State()
+    waiting_product_id = State()
+    waiting_shop_address = State()
+    waiting_shop_profile_link = State()
     waiting_avito_link = State()
 
 # Глобальные переменные для хранения данных поста
@@ -266,7 +270,113 @@ async def photos_done(message: Message, state: FSMContext):
     
     await message.answer(
         f"✅ Фотографии загружены ({len(photos)} шт.)\n\n"
-        "🔗 Теперь отправьте ссылку на объявление Авито:"
+        "💰 Теперь введите цену товара в рублях (или отправьте /skip чтобы пропустить):"
+    )
+    await state.set_state(PostCreation.waiting_price)
+
+@router.message(StateFilter(PostCreation.waiting_price))
+async def process_price(message: Message, state: FSMContext):
+    """Обработка цены"""
+    if message.text and (message.text.strip().lower() == "/skip" or message.text.strip().lower() == "skip"):
+        price = None
+    else:
+        try:
+            price = message.text.strip()
+            # Проверяем, что это число
+            float(price.replace(" ", "").replace(",", "."))
+        except:
+            await message.answer("⚠️ Пожалуйста, введите корректную цену (число) или /skip")
+            return
+    
+    await state.update_data(price=price)
+    await message.answer(
+        "🔢 Введите ID товара (артикул) или отправьте /skip чтобы пропустить:"
+    )
+    await state.set_state(PostCreation.waiting_product_id)
+
+@router.message(StateFilter(PostCreation.waiting_product_id))
+async def process_product_id(message: Message, state: FSMContext):
+    """Обработка ID товара"""
+    if message.text and (message.text.strip().lower() == "/skip" or message.text.strip().lower() == "skip"):
+        product_id = None
+    else:
+        product_id = message.text.strip()
+    
+    await state.update_data(product_id=product_id)
+    
+    # Загружаем список адресов магазинов
+    addresses = await globals_module.db.get_shop_addresses()
+    
+    if addresses:
+        keyboard = InlineKeyboardBuilder()
+        for addr_id, addr_name, addr_text in addresses:
+            keyboard.button(
+                text=f"📍 {addr_name}",
+                callback_data=f"shop_address_{addr_id}"
+            )
+        keyboard.button(text="✏️ Ввести свой адрес", callback_data="shop_address_custom")
+        keyboard.adjust(1)
+        
+        addresses_text = "\n".join([f"• {name}: {text}" for _, name, text in addresses])
+        await message.answer(
+            f"📍 Выберите адрес магазина:\n\n{addresses_text}\n\n"
+            "Или введите свой адрес:",
+            reply_markup=keyboard.as_markup()
+        )
+    else:
+        await message.answer(
+            "📍 Введите адрес магазина:"
+        )
+    
+    await state.set_state(PostCreation.waiting_shop_address)
+
+@router.callback_query(F.data.startswith("shop_address_"), StateFilter(PostCreation.waiting_shop_address))
+async def process_shop_address_callback(callback: CallbackQuery, state: FSMContext):
+    """Обработка выбора адреса магазина из списка"""
+    if callback.data == "shop_address_custom":
+        await callback.message.edit_text("📍 Введите адрес магазина:")
+        await callback.answer()
+        return
+    
+    address_id = int(callback.data.split("_")[-1])
+    address = await globals_module.db.get_shop_address(address_id)
+    
+    if address:
+        await state.update_data(shop_address=address[2])
+        await callback.message.edit_text(
+            f"✅ Адрес выбран: {address[2]}\n\n"
+            "💬 Введите ссылку на профиль для покупки (например: @username или https://t.me/username) или /skip:"
+        )
+        await callback.answer()
+        await state.set_state(PostCreation.waiting_shop_profile_link)
+
+@router.message(StateFilter(PostCreation.waiting_shop_address))
+async def process_shop_address(message: Message, state: FSMContext):
+    """Обработка ввода адреса магазина"""
+    shop_address = message.text.strip()
+    await state.update_data(shop_address=shop_address)
+    
+    await message.answer(
+        "💬 Введите ссылку на профиль для покупки (например: @username или https://t.me/username) или /skip:"
+    )
+    await state.set_state(PostCreation.waiting_shop_profile_link)
+
+@router.message(StateFilter(PostCreation.waiting_shop_profile_link))
+async def process_shop_profile_link(message: Message, state: FSMContext):
+    """Обработка ссылки на профиль"""
+    if message.text and (message.text.strip().lower() == "/skip" or message.text.strip().lower() == "skip"):
+        shop_profile_link = None
+    else:
+        shop_profile_link = message.text.strip()
+        # Нормализуем ссылку
+        if shop_profile_link.startswith("@"):
+            shop_profile_link = f"https://t.me/{shop_profile_link[1:]}"
+        elif not shop_profile_link.startswith("http"):
+            shop_profile_link = f"https://t.me/{shop_profile_link}"
+    
+    await state.update_data(shop_profile_link=shop_profile_link)
+    await message.answer(
+        "🛒 Теперь отправьте ссылку на объявление Авито:"
     )
     await state.set_state(PostCreation.waiting_avito_link)
 
@@ -282,20 +392,35 @@ async def process_avito_link(message: Message, state: FSMContext):
     
     data = await state.get_data()
     
-    # Формируем пост
+    # Формируем пост с новыми полями
     post_text = format_post(
         data.get("product_name"),
         data.get("category"),
         data.get("specifications", {}),
-        avito_link
+        avito_link,
+        price=data.get("price"),
+        product_id=data.get("product_id"),
+        shop_address=data.get("shop_address"),
+        shop_profile_link=data.get("shop_profile_link")
     )
+    
+    # Сохраняем дополнительные данные в specifications
+    extended_specs = data.get("specifications", {}).copy()
+    if data.get("price"):
+        extended_specs['_price'] = data.get("price")
+    if data.get("product_id"):
+        extended_specs['_product_id'] = data.get("product_id")
+    if data.get("shop_address"):
+        extended_specs['_shop_address'] = data.get("shop_address")
+    if data.get("shop_profile_link"):
+        extended_specs['_shop_profile_link'] = data.get("shop_profile_link")
     
     # Сохраняем пост в базу данных
     post_id = await globals_module.db.create_post(
         user_id=message.from_user.id,
         category=data.get("category"),
         product_name=data.get("product_name"),
-        specifications=data.get("specifications", {}),
+        specifications=extended_specs,
         photos=data.get("photos", []),
         avito_link=avito_link
     )
@@ -305,9 +430,22 @@ async def process_avito_link(message: Message, state: FSMContext):
     # Отправляем пост администратору на модерацию
     from config import ADMIN_ID
     
-    # Создаем кнопку "Купить"
-    buy_keyboard = InlineKeyboardBuilder()
-    buy_keyboard.button(text="🛒 Купить", url=avito_link)
+    # Создаем две кнопки (как в Mini App)
+    post_keyboard = InlineKeyboardBuilder()
+    shop_profile_link = data.get("shop_profile_link")
+    
+    if shop_profile_link:
+        # Нормализуем ссылку на профиль
+        profile_url = shop_profile_link
+        if not profile_url.startswith('http'):
+            if profile_url.startswith('@'):
+                profile_url = f"https://t.me/{profile_url[1:]}"
+            else:
+                profile_url = f"https://t.me/{profile_url}"
+        post_keyboard.button(text="💬 Написать в магазин", url=profile_url)
+    
+    post_keyboard.button(text="🛒 Купить на Авито", url=avito_link)
+    post_keyboard.adjust(2)
     
     # Отправляем пост администратору
     author_name = get_user_full_name(message.from_user)
@@ -317,7 +455,8 @@ async def process_avito_link(message: Message, state: FSMContext):
         f"Автор: {author_name}\n"
         f"ID поста: {post_id}\n\n"
         f"{post_text}",
-        parse_mode="HTML"
+        parse_mode="HTML",
+        reply_markup=post_keyboard.as_markup()
     )
     
     # Отправляем фотографии администратору
