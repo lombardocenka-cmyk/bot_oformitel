@@ -447,28 +447,52 @@ async def process_avito_link(message: Message, state: FSMContext):
     post_keyboard.button(text="🛒 Купить на Авито", url=avito_link)
     post_keyboard.adjust(2)
     
-    # Отправляем пост администратору
+    # Отправляем пост администратору с фотографиями в одном сообщении
     author_name = get_user_full_name(message.from_user)
-    admin_message = await globals_module.bot.send_message(
-        ADMIN_ID,
-        f"📝 <b>Новый пост на модерацию</b>\n\n"
-        f"Автор: {author_name}\n"
-        f"ID поста: {post_id}\n\n"
-        f"{post_text}",
-        parse_mode="HTML",
-        reply_markup=post_keyboard.as_markup()
-    )
-    
-    # Отправляем фотографии администратору
     photos = data.get("photos", [])
+    
     if photos:
         if len(photos) == 1:
-            await globals_module.bot.send_photo(ADMIN_ID, photos[0])
+            # Одна фотография с текстом
+            await globals_module.bot.send_photo(
+                ADMIN_ID,
+                photos[0],
+                caption=f"📝 <b>Новый пост на модерацию</b>\n\n"
+                       f"Автор: {author_name}\n"
+                       f"ID поста: {post_id}\n\n"
+                       f"{post_text}",
+                parse_mode="HTML",
+                reply_markup=post_keyboard.as_markup()
+            )
         else:
-            # Отправляем медиа-группу
+            # Медиа-группа: первое фото с текстом
             from aiogram.types import InputMediaPhoto
             media = [InputMediaPhoto(media=photo_id) for photo_id in photos[:10]]
-            await globals_module.bot.send_media_group(ADMIN_ID, media)
+            media[0].caption = f"📝 <b>Новый пост на модерацию</b>\n\n" \
+                              f"Автор: {author_name}\n" \
+                              f"ID поста: {post_id}\n\n" \
+                              f"{post_text}"
+            media[0].parse_mode = "HTML"
+            
+            sent_messages = await globals_module.bot.send_media_group(ADMIN_ID, media)
+            
+            # Добавляем кнопки к первому сообщению
+            await globals_module.bot.edit_message_reply_markup(
+                ADMIN_ID,
+                sent_messages[0].message_id,
+                reply_markup=post_keyboard.as_markup()
+            )
+    else:
+        # Только текст
+        await globals_module.bot.send_message(
+            ADMIN_ID,
+            f"📝 <b>Новый пост на модерацию</b>\n\n"
+            f"Автор: {author_name}\n"
+            f"ID поста: {post_id}\n\n"
+            f"{post_text}",
+            parse_mode="HTML",
+            reply_markup=post_keyboard.as_markup()
+        )
     
     # Клавиатура для модерации
     moderation_keyboard = InlineKeyboardBuilder()

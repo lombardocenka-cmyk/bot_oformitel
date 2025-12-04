@@ -346,7 +346,7 @@ async def create_post(request: Request):
         moderation_keyboard.adjust(2)
         
         try:
-            # Отправляем пост администратору
+            # Отправляем пост администратору с фотографиями в одном сообщении
             author_name = "Пользователь"
             if init_data:
                 try:
@@ -356,20 +356,58 @@ async def create_post(request: Request):
                 except:
                     pass
             
-            await globals_module.bot.send_message(
-                ADMIN_ID,
-                f"📝 <b>Новый пост на модерацию (Mini App)</b>\n\n"
-                f"Автор: {author_name}\n"
-                f"ID поста: {post_id}\n\n"
-                f"{post_text}",
-                parse_mode="HTML"
-            )
+            moderation_text = f"📝 <b>Новый пост на модерацию (Mini App)</b>\n\n" \
+                             f"Автор: {author_name}\n" \
+                             f"ID поста: {post_id}\n\n" \
+                             f"{post_text}"
             
-            # Отправляем фотографии (если есть)
-            if photos:
-                # В реальности нужно загрузить фото на сервер и отправить file_id
-                # Здесь упрощенная версия
-                pass
+            # Отправляем фотографии с текстом (если есть)
+            if photos and len(photos) > 0:
+                # В Mini App фото приходят как file_id (если уже загружены в Telegram)
+                # или как base64/URL (нужно загрузить)
+                # Пока что предполагаем, что это file_id
+                try:
+                    if len(photos) == 1:
+                        # Одна фотография с текстом
+                        await globals_module.bot.send_photo(
+                            ADMIN_ID,
+                            photos[0],
+                            caption=moderation_text,
+                            parse_mode="HTML",
+                            reply_markup=post_keyboard.as_markup()
+                        )
+                    else:
+                        # Медиа-группа: первое фото с текстом
+                        from aiogram.types import InputMediaPhoto
+                        media = [InputMediaPhoto(media=photo_id) for photo_id in photos[:10]]
+                        media[0].caption = moderation_text
+                        media[0].parse_mode = "HTML"
+                        
+                        sent_messages = await globals_module.bot.send_media_group(ADMIN_ID, media)
+                        
+                        # Добавляем кнопки к первому сообщению
+                        await globals_module.bot.edit_message_reply_markup(
+                            ADMIN_ID,
+                            sent_messages[0].message_id,
+                            reply_markup=post_keyboard.as_markup()
+                        )
+                except Exception as photo_error:
+                    # Если не удалось отправить фото, отправляем только текст
+                    logger.warning(f"Could not send photos: {photo_error}")
+                    await globals_module.bot.send_message(
+                        ADMIN_ID,
+                        moderation_text,
+                        parse_mode="HTML",
+                        reply_markup=post_keyboard.as_markup()
+                    )
+            else:
+                # Только текст
+                await globals_module.bot.send_message(
+                    ADMIN_ID,
+                    moderation_text,
+                    parse_mode="HTML",
+                    reply_markup=post_keyboard.as_markup()
+                )
             
             # Клавиатура для модерации
             await globals_module.bot.send_message(

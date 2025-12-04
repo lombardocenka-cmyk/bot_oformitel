@@ -135,16 +135,35 @@ async def publish_post(post_id: int, post: dict):
     """Публикация поста в канал"""
     from config import CHANNEL_ID
     
-    # Создаем кнопку "Купить на Авито" автоматически из ссылки
-    buy_keyboard = InlineKeyboardBuilder()
-    buy_keyboard.button(text="🛒 Купить на Авито", url=post["avito_link"])
+    # Извлекаем дополнительные данные из specifications
+    specs = post.get("specifications", {})
+    shop_profile_link = specs.get("_shop_profile_link")
+    avito_link = post["avito_link"]
     
-    # Отправляем фотографии
+    # Создаем две кнопки
+    post_keyboard = InlineKeyboardBuilder()
+    
+    # Кнопка "Написать в магазин" (если есть ссылка)
+    if shop_profile_link:
+        # Нормализуем ссылку на профиль
+        profile_url = shop_profile_link
+        if not profile_url.startswith('http'):
+            if profile_url.startswith('@'):
+                profile_url = f"https://t.me/{profile_url[1:]}"
+            else:
+                profile_url = f"https://t.me/{profile_url}"
+        post_keyboard.button(text="💬 Написать в магазин", url=profile_url)
+    
+    # Кнопка "Купить на Авито"
+    post_keyboard.button(text="🛒 Купить на Авито", url=avito_link)
+    post_keyboard.adjust(2)
+    
+    # Отправляем фотографии с текстом в одном сообщении
     photos = post["photos"]
     
     if photos:
         if len(photos) == 1:
-            # Одна фотография
+            # Одна фотография с текстом
             await globals_module.bot.send_photo(
                 CHANNEL_ID,
                 photos[0],
@@ -153,18 +172,19 @@ async def publish_post(post_id: int, post: dict):
                 parse_mode="HTML"
             )
         else:
-            # Медиа-группа
+            # Медиа-группа: первое фото с текстом, остальные без текста
             from aiogram.types import InputMediaPhoto
             media = [InputMediaPhoto(media=photo_id) for photo_id in photos[:10]]
+            # Текст и кнопки только на первом фото
             media[0].caption = post["post_text"]
             media[0].parse_mode = "HTML"
             
             sent_messages = await globals_module.bot.send_media_group(CHANNEL_ID, media)
             
-            # Добавляем кнопки к последнему сообщению
+            # Добавляем кнопки к первому сообщению (с текстом)
             await globals_module.bot.edit_message_reply_markup(
                 CHANNEL_ID,
-                sent_messages[-1].message_id,
+                sent_messages[0].message_id,
                 reply_markup=post_keyboard.as_markup()
             )
     else:

@@ -47,11 +47,15 @@ async def format_post(product_name: str, category: str, specifications: Dict[str
         post = post.replace("{shop_profile_link}", shop_profile_link or "")
         post = post.replace("{avito_link}", avito_link)
         
-        # Заменяем характеристики
+        # Заменяем характеристики (каждая с уникальным оформлением)
         specs_text = ""
         for spec_name, spec_value in specifications.items():
+            # Пропускаем служебные поля
+            if spec_name.startswith("_"):
+                continue
+                
             if spec_value and spec_value.strip() and spec_value != "Не указано":
-                specs_text += f"│ <b>{spec_name}</b>: {spec_value}\n"
+                specs_text += f"│ 🔹 <b>{spec_name}</b>: {spec_value}\n"
         
         if not specs_text:
             specs_text = "│ Характеристики не указаны\n"
@@ -62,7 +66,6 @@ async def format_post(product_name: str, category: str, specifications: Dict[str
     
     # Если шаблона нет, используем дефолтное форматирование
     emoji = category_emoji.get(category, "📦")
-    category_name = CATEGORIES.get(category, "Техника")
     
     # Красивый заголовок с эмодзи и разделителями
     post = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -77,19 +80,20 @@ async def format_post(product_name: str, category: str, specifications: Dict[str
     if product_id:
         post += f"🔢 <b>Артикул:</b> {product_id}\n\n"
     
-    # Категория с иконкой
-    post += f"📂 <b>Категория:</b> {category_name}\n\n"
-    
-    # Характеристики с красивым оформлением
+    # Характеристики с красивым оформлением (каждая характеристика отдельно)
     post += "⚙️ <b>📋 ХАРАКТЕРИСТИКИ:</b>\n"
     post += "┌─────────────────────────────┐\n"
     
     spec_count = 0
     for spec_name, spec_value in specifications.items():
+        # Пропускаем служебные поля
+        if spec_name.startswith("_"):
+            continue
+            
         if spec_value and spec_value.strip() and spec_value != "Не указано":
             spec_count += 1
-            # Красивое форматирование характеристики
-            post += f"│ <b>{spec_name}</b>: {spec_value}\n"
+            # Уникальное оформление для каждой характеристики
+            post += f"│ 🔹 <b>{spec_name}</b>: {spec_value}\n"
     
     if spec_count == 0:
         post += "│ Характеристики не указаны\n"
@@ -100,17 +104,6 @@ async def format_post(product_name: str, category: str, specifications: Dict[str
     if shop_address:
         post += f"📍 <b>Адрес магазина:</b>\n"
         post += f"{shop_address}\n\n"
-    
-    # Разделитель
-    post += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-    
-    # Контакты
-    if shop_profile_link:
-        post += f"💬 <b>Написать в магазин:</b>\n"
-        post += f"{shop_profile_link}\n\n"
-    
-    post += "🛒 <b>Купить на Авито:</b>\n"
-    post += f"{avito_link}\n\n"
     
     # Разделитель
     post += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
