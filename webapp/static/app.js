@@ -3,6 +3,11 @@ const tg = window.Telegram.WebApp;
 tg.ready();
 tg.expand();
 
+// Проверка доступности initData
+if (!tg.initData) {
+    console.warn('initData not available. Some features may not work.');
+}
+
 // Состояние приложения
 let state = {
     category: null,
@@ -259,11 +264,7 @@ document.getElementById('edit-preview-btn').addEventListener('click', () => {
 
 // Шаг 6: Отправка поста
 document.getElementById('submit-btn').addEventListener('click', async () => {
-    tg.showPopup({
-        title: 'Отправка поста',
-        message: 'Отправляем пост на модерацию...',
-        buttons: [{ type: 'ok' }]
-    });
+    tg.showAlert('Отправляем пост на модерацию...');
     
     try {
         const response = await fetch('/api/create-post', {
